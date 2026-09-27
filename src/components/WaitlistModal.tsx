@@ -18,35 +18,15 @@ const WaitlistModal = ({ isOpen, onClose }: WaitlistModalProps) => {
     if (!fullName || !email) return;
 
     setIsSubmitting(true);
+    setIsSuccess(true);
 
-    const formData = new FormData();
-    formData.append("Name", fullName);
-    formData.append("Email", email);
-
-    try {
-      await fetch(
-        "https://script.google.com/macros/s/AKfycbzAUCnxTKKYzeSth2LiF0ROigPtV-XeliqmEs0YVFmvOYZEBL2NkzF4YPKblxvOCWE/exec",
-        {
-          method: "POST",
-          body: formData,
-          mode: "no-cors",
-        }
-      );
-
-      setIsSuccess(true);
-
-      setTimeout(() => {
-        onClose();
-        setIsSuccess(false);
-        setFullName("");
-        setEmail("");
-      }, 2000);
-    } catch (error) {
-      console.error("Error submitting to waitlist:", error);
-      alert("Something went wrong. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    // The full backend flow (phone + email OTP, XaneTag reservation and
+    // Telegram verification) lives on the dedicated /waitlist page.
+    // Send users there instead of maintaining a second, incomplete signup path.
+    const query = new URLSearchParams();
+    if (fullName.trim()) query.set("name", fullName.trim());
+    if (email.trim()) query.set("email", email.trim());
+    window.location.href = `/waitlist${query.toString() ? `?${query.toString()}` : ""}`;
   };
 
   return (

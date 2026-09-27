@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import WaitlistBackground from "@/components/waitlist/WaitlistBackground";
 import WaitlistHeader from "@/components/waitlist/WaitlistHeader";
 import WaitlistForm, { WaitlistFormData } from "@/components/waitlist/WaitlistForm";
@@ -14,26 +14,25 @@ type WaitlistViewStep = "form" | "telegram" | "celebration" | "dashboard" | "lea
 const WaitlistPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const initialView = (searchParams.get("view") as WaitlistViewStep) || "form";
+  const initialView = location.pathname === "/leaderboard" ? "leaderboard" : ((searchParams.get("view") as WaitlistViewStep) || "form");
   const [currentStep, setCurrentStep] = useState<WaitlistViewStep>(initialView);
 
   // User State saved in localStorage for seamless return
   const [userData, setUserData] = useState<WaitlistFormData>(() => {
     const saved = localStorage.getItem("xane_waitlist_user");
     if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback
-      }
+      try { return JSON.parse(saved); } catch { /* ignore invalid local state */ }
     }
     return {
-      fullName: "Goodness Paul",
-      phone: "+23408012345678",
-      email: "goodnesspaul@gmail.com",
-      freeTag: "@erva_22.xane",
-      premiumTag: "@erva.xane",
+      fullName: "",
+      phone: "",
+      email: "",
+      freeTag: "",
+      premiumTag: "",
+      userId: "",
+      telegramDeepLink: "",
     };
   });
 
@@ -100,7 +99,7 @@ const WaitlistPage = () => {
         )}
 
         {currentStep === "telegram" && (
-          <TelegramStep onContinue={handleTelegramContinue} />
+          <TelegramStep userId={userData.userId} telegramUrl={userData.telegramDeepLink} onContinue={handleTelegramContinue} />
         )}
 
         {currentStep === "celebration" && (
@@ -116,7 +115,7 @@ const WaitlistPage = () => {
 
         {currentStep === "leaderboard" && (
           <LeaderboardView
-            currentUserTag={userData.premiumTag || userData.freeTag || "@erva.xane"}
+            currentUserTag={userData.premiumTag || userData.freeTag}
           />
         )}
       </main>
