@@ -1,0 +1,2 @@
+ALTER TABLE otp_codes
+ADD COLUMN IF NOT EXISTS otp_code_hash TEXT;
