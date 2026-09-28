@@ -13,28 +13,52 @@ const {
 
 async function checkUsername(req, res, next) {
   try {
-    const tag = normalizeTag(req.query.tag || req.body.tag);
+    const rawTag = req.query.tag;
+    const type = String(req.query.type || 'free').toLowerCase();
 
-    if (!isValidTagFormat(tag)) {
-      return res.json({
+    const tag = normalizeTag(rawTag);
+
+    if (!tag) {
+      return res.status(400).json({
         available: false,
-        reason: 'Must be 3-20 characters: lowercase letters, numbers and underscores.',
+        reason: 'XaneTag is required',
       });
     }
+
+    const isPremium = type === 'premium';
+
+    const valid = isPremium
+      ? isValidPremiumTagFormat(tag)
+      : isValidTagFormat(tag);
+
+    if (!valid) {
+      return res.json({
+        available: false,
+        reason: isPremium
+          ? 'Must be 3-20 lowercase letters, numbers or underscores.'
+          : 'Must be 5-20 characters and contain at least one number or underscore.',
+      });
+    }
+
     if (isReserved(tag)) {
-      return res.json({ available: false, reason: 'This tag is reserved.', suggestions: suggestAlternatives(tag) });
+      return res.json({
+        available: false,
+        reason: 'This XaneTag is reserved.',
+      });
     }
 
     const { rows } = await pool.query(
-      `SELECT 1 FROM waitlist_users WHERE xane_tag = $1 OR premium_xane_tag_requested = $1 OR premium_xane_tag = $1`,
+      `SELECT 1
+       FROM waitlist_users
+       WHERE LOWER(xane_tag) = $1
+          OR LOWER(premium_xane_tag) = $1
+       LIMIT 1`,
       [tag]
     );
 
-    if (rows.length > 0) {
-      return res.json({ available: false, reason: 'Already taken.', suggestions: suggestAlternatives(tag) });
-    }
-
-    return res.json({ available: true });
+    res.json({
+      available: rows.length === 0,
+    });
   } catch (err) {
     next(err);
   }
@@ -165,7 +189,10 @@ async function telegramStatus(req, res, next) {
 async function getMe(req, res, next) {
   try {
     const { userId } = req.params;
-    const { rows } = await pool.query(`SELECT * FROM waitlist_users WHERE id = $1`, [userId]);
+    const { rows } = await pool.query(
+  `SELECT * FROM waitlist_users WHERE id = $1`,
+  [userId]
+);
     const user = rows[0];
     if (!user) return res.status(404).json({ error: 'Not found' });
 
@@ -189,7 +216,10 @@ async function getMe(req, res, next) {
 async function getClimb(req, res, next) {
   try {
     const { userId } = req.params;
-    const { rows } = await pool.query(`SELECT * FROM waitlist_users WHERE id = $1`, [userId]);
+    const { rows } = await pool.query(
+  `SELECT * FROM waitlist_users WHERE id = $1`,
+  [userId]
+);
     const user = rows[0];
     if (!user) return res.status(404).json({ error: 'Not found' });
 
