@@ -72,44 +72,60 @@ async function verifyOtp(req, res, next) {
 
 async function joinWaitlist(req, res, next) {
   try {
-    const { fullName, phone, email, xaneTag, premiumXaneTag, referralCode } = req.body;
+    const {
+      fullName,
+      phone,
+      email,
+      xaneTag,
+      premiumXaneTag,
+      referralCode,
+    } = req.body;
 
     if (!fullName || !phone || !email || !xaneTag) {
-      return res.status(400).json({ error: 'fullName, phone, email and xaneTag are required' });
+      return res.status(400).json({
+        error: 'Full name, phone, email and XaneTag are required',
+      });
     }
 
     const tag = normalizeTag(xaneTag);
 
-if (
-  !isValidTagFormat(tag) ||
-  isReserved(tag)
-) {
-  return res.status(400).json({
-    error: 'Invalid XaneTag. Free XaneTags must contain at least one number or underscore and be 3-20 characters.',
-  });
-}
+    if (!isValidTagFormat(tag)) {
+      return res.status(400).json({
+        error: 'Invalid XaneTag',
+      });
+    }
+
+    if (isReserved(tag)) {
+      return res.status(400).json({
+        error: 'This XaneTag is reserved',
+      });
+    }
 
     const phoneOk = await otpService.isVerified({ identifier: phone, purpose: 'phone' });
     const emailOk = await otpService.isVerified({ identifier: email, purpose: 'email' });
     if (!phoneOk) return res.status(400).json({ error: 'Phone is not verified yet' });
     if (!emailOk) return res.status(400).json({ error: 'Email is not verified yet' });
 
-    let premiumTag = null;
+let premiumTag = null;
 let premiumDeadline = null;
 
 if (premiumXaneTag) {
   premiumTag = normalizeTag(premiumXaneTag);
 
-  if (
-    !isValidPremiumTagFormat(premiumTag) ||
-    isReserved(premiumTag)
-  ) {
+  if (!isValidPremiumTagFormat(premiumTag)) {
     return res.status(400).json({
-      error: 'Invalid premium XaneTag.',
+      error: 'Invalid premium XaneTag',
     });
   }
-      premiumDeadline = referralService.premiumTagDeadline();
-    }
+
+  if (isReserved(premiumTag)) {
+    return res.status(400).json({
+      error: 'This premium XaneTag is reserved',
+    });
+  }
+
+  premiumDeadline = referralService.premiumTagDeadline();
+}
 
     let referredBy = null;
     if (referralCode) {

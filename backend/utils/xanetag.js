@@ -1,5 +1,5 @@
-const FREE_TAG_REGEX = /^(?=.*[\d_])[a-z0-9_]{3,20}$/;
-const PREMIUM_TAG_REGEX = /^[a-z0-9_]{3,20}$/;
+const FREE_TAG_REGEX = /^(?=.*[\d_])[a-z0-9_]{5,20}$/;
+const PREMIUM_TAG_REGEX = /^[a-z0-9_]{5,20}$/;
 
 const RESERVED_TAGS = new Set([
   'admin',
@@ -19,26 +19,26 @@ function normalizeTag(raw) {
 }
 
 function isValidTagFormat(tag) {
-  return FREE_TAG_REGEX.test(tag);
+  return FREE_TAG_REGEX.test(normalizeTag(tag));
 }
 
 function isValidPremiumTagFormat(tag) {
-  return PREMIUM_TAG_REGEX.test(tag);
+  return PREMIUM_TAG_REGEX.test(normalizeTag(tag));
 }
 
 function isReserved(tag) {
-  return RESERVED_TAGS.has(tag);
+  return RESERVED_TAGS.has(normalizeTag(tag));
 }
 
 function suggestAlternatives(tag) {
-  const base = tag.slice(0, 16);
+  const base = normalizeTag(tag).slice(0, 16);
   const suggestions = new Set();
 
-  for (let i = 0; i < 6 && suggestions.size < 3; i++) {
-    const suffix = Math.floor(10 + Math.random() * 89);
+  for (let i = 0; i < 10 && suggestions.size < 3; i++) {
+    const suffix = Math.floor(10 + Math.random() * 90);
     const candidate = `${base}_${suffix}`.slice(0, 20);
 
-    if (isValidTagFormat(candidate)) {
+    if (isValidTagFormat(candidate) && !isReserved(candidate)) {
       suggestions.add(candidate);
     }
   }
