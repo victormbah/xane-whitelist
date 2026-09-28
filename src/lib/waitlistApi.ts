@@ -116,7 +116,7 @@ export async function verifyOtp(
 
 export async function checkXaneTag(
   tag: string,
-  type: XaneTagType
+  type: "free" | "premium"
 ) {
   const rawTag = normalizeTag(tag);
 
