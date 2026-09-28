@@ -4,13 +4,20 @@ const path = require('path');
 const { pool } = require('../config/db');
 
 async function run() {
-  const file = path.join(__dirname, '001_init.sql');
-  const sql = fs.readFileSync(file, 'utf8');
+  const migrations = [
+    '001_init.sql',
+    '002_email_otp.sql',
+  ];
 
-  console.log('Running migration: 001_init.sql');
   try {
-    await pool.query(sql);
-    console.log('Migration applied successfully.');
+    for (const fileName of migrations) {
+      const file = path.join(__dirname, fileName);
+      const sql = fs.readFileSync(file, 'utf8');
+
+      console.log('Running migration: ' + fileName);
+      await pool.query(sql);
+      console.log('Migration applied successfully: ' + fileName);
+    }
   } catch (err) {
     console.error('Migration failed:', err.message);
     process.exitCode = 1;

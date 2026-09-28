@@ -5,8 +5,8 @@ const { deepLinkForUser } = require('../config/telegram');
 const {
   normalizeTag,
   isValidTagFormat,
+  isValidPremiumTagFormat,
   isReserved,
-  suggestAlternatives,
 } = require('../utils/xanetag');
 
 // ---- Username availability -------------------------------------------------
@@ -79,9 +79,15 @@ async function joinWaitlist(req, res, next) {
     }
 
     const tag = normalizeTag(xaneTag);
-    if (!isValidTagFormat(tag) || isReserved(tag)) {
-      return res.status(400).json({ error: 'Invalid or unavailable XaneTag' });
-    }
+
+if (
+  !isValidTagFormat(tag) ||
+  isReserved(tag)
+) {
+  return res.status(400).json({
+    error: 'Invalid XaneTag. Free XaneTags must contain at least one number or underscore and be 3-20 characters.',
+  });
+}
 
     const phoneOk = await otpService.isVerified({ identifier: phone, purpose: 'phone' });
     const emailOk = await otpService.isVerified({ identifier: email, purpose: 'email' });
@@ -89,12 +95,19 @@ async function joinWaitlist(req, res, next) {
     if (!emailOk) return res.status(400).json({ error: 'Email is not verified yet' });
 
     let premiumTag = null;
-    let premiumDeadline = null;
-    if (premiumXaneTag) {
-      premiumTag = normalizeTag(premiumXaneTag);
-      if (!isValidTagFormat(premiumTag) || isReserved(premiumTag)) {
-        return res.status(400).json({ error: 'Invalid premium XaneTag' });
-      }
+let premiumDeadline = null;
+
+if (premiumXaneTag) {
+  premiumTag = normalizeTag(premiumXaneTag);
+
+  if (
+    !isValidPremiumTagFormat(premiumTag) ||
+    isReserved(premiumTag)
+  ) {
+    return res.status(400).json({
+      error: 'Invalid premium XaneTag.',
+    });
+  }
       premiumDeadline = referralService.premiumTagDeadline();
     }
 
