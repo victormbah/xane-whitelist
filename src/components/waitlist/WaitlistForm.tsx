@@ -74,16 +74,16 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
       setTagMessage("");
       return;
     }
-    if (!/^[a-z0-9_]{3,20}$/.test(normalizedFreeTag)) {
+    if (!/^[a-z0-9_]{5,20}$/.test(normalizedFreeTag)) {
       setFreeTagState("invalid");
-      setTagMessage("Use 3–20 lowercase letters, numbers or underscores.");
+      setTagMessage("5–20 characters. Must include a number or '_'.");
       return;
     }
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       setFreeTagState("checking");
       try {
-        const result = await checkXaneTag(normalizedFreeTag);
+        const result = await checkXaneTag(normalizedFreeTag, "free");
         if (cancelled) return;
         setFreeTagState(result.available ? "available" : "taken");
         setTagMessage(result.available ? "Available ✓" : result.reason || "Already taken.");
@@ -105,16 +105,16 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
       setPremiumMessage("");
       return;
     }
-    if (!/^[a-z0-9_]{3,20}$/.test(normalizedPremiumTag)) {
+    if (!/^[a-z0-9_]{5,20}$/.test(normalizedPremiumTag)) {
       setPremiumTagState("invalid");
-      setPremiumMessage("Use 3–20 lowercase letters, numbers or underscores.");
+      setPremiumMessage("5–20 characters.");
       return;
     }
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       setPremiumTagState("checking");
       try {
-        const result = await checkXaneTag(normalizedPremiumTag);
+        const result = await checkXaneTag(normalizedPremiumTag, "premium");
         if (cancelled) return;
         setPremiumTagState(result.available ? "available" : "taken");
         setPremiumMessage(result.available ? "Available ✓" : result.reason || "Already taken.");
@@ -188,8 +188,13 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
   };
 
   const handlePremiumTagChange = (value: string) => {
-    setPremiumTag(value.replace(/^@/, "").replace(/\.xane$/i, "").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20));
-  };
+  setPremiumTag(
+    value
+      .replace(/^@/, "")
+      .replace(/\.xane$/i, "")
+      .slice(0, 21)
+  );
+};
 
   const isFormValid =
     fullName.trim().length >= 2 &&
@@ -277,7 +282,7 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
           <div className="space-y-1 text-left">
             <label className="text-[11px] font-bold tracking-wider text-[#111111] uppercase">FREE XANETAG</label>
             <div className="relative flex items-center"><User size={18} className="pointer-events-none absolute left-3.5 text-gray-400" /><input type="text" required value={freeTag} onChange={(e) => handleFreeTagChange(e.target.value)} placeholder="e.g yourname_22" className={`w-full rounded-[14px] border py-3 pl-11 pr-28 text-sm font-medium outline-none transition-all placeholder:text-gray-400 focus:border-[#0047FF] focus:ring-4 focus:ring-[#0047FF]/10 ${freeTagState === "available" ? "border-emerald-400" : freeTagState === "taken" || freeTagState === "invalid" ? "border-red-400" : "border-gray-300"}`} /><span className="absolute right-3 text-xs font-bold text-gray-400">.xane</span></div>
-            <div className="flex items-center justify-between gap-2 text-[10px]"><p className="text-gray-400">3–20 lowercase letters, numbers or underscores.</p><span className={freeTagState === "available" ? "font-semibold text-emerald-600" : "font-semibold text-red-500"}>{freeTagState === "checking" ? "Checking..." : freeTagState !== "idle" ? tagMessage : ""}</span></div>
+            <div className="flex items-center justify-between gap-2 text-[10px]"><p className="text-gray-400">5–20 lowercase letters, numbers or underscores.</p><span className={freeTagState === "available" ? "font-semibold text-emerald-600" : "font-semibold text-red-500"}>{freeTagState === "checking" ? "Checking..." : freeTagState !== "idle" ? tagMessage : ""}</span></div>
           </div>
 
           <div className="rounded-[18px] border border-[#0047FF]/30 bg-[#F0F5FF] p-4 text-left space-y-1.5">
