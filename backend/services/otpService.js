@@ -7,9 +7,6 @@ const { sendEmailOtp } = require('../config/resend');
 const RESEND_COOLDOWN_SECONDS = 60;
 const OTP_EXPIRY_MINUTES = 10;
 
-// Toggle phone OTP without removing Sendchamp.
-// false = validate phone and mark it verified without SMS
-// true  = use the normal Sendchamp SMS OTP flow
 const PHONE_OTP_ENABLED =
   String(process.env.PHONE_OTP_ENABLED ?? 'true').toLowerCase() === 'true';
 
@@ -21,13 +18,44 @@ function generateOtp() {
   return crypto.randomInt(100000, 1000000).toString();
 }
 
-function isValidNigeriaPhone(identifier) {
-  const digits = String(identifier || '').replace(/\D/g, '');
+function normalizePhone(identifier) {
+  return String(identifier || '').replace(/\D/g, '');
+}
 
-  // Accept:
-  // 8012345678
-  // 2348012345678
+function isValidNigeriaPhone(identifier) {
+  const digits = normalizePhone(identifier);
+
   return /^(?:234)?[789]\d{9}$/.test(digits);
+}
+
+async function isAlreadyRegistered(identifier, purpose) {
+  if (purpose === 'email') {
+    const { rows } = await pool.query(
+      `SELECT 1
+       FROM waitlist_users
+       WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
+       LIMIT 1`,
+      [identifier]
+    );
+
+    return rows.length > 0;
+  }
+
+  if (purpose === 'phone') {
+    const digits = normalizePhone(identifier);
+
+    const { rows } = await pool.query(
+      `SELECT 1
+       FROM waitlist_users
+       WHERE regexp_replace(phone, '\\D', '', 'g') = $1
+       LIMIT 1`,
+      [digits]
+    );
+
+    return rows.length > 0;
+  }
+
+  return false;
 }
 
 /**
@@ -50,8 +78,26 @@ async function requestOtp({ identifier, purpose }) {
   }
 
   // ---------------------------------------------------------------------------
+  // DUPLICATE ACCOUNT CHECK
+  // ---------------------------------------------------------------------------
+
+  const alreadyRegistered = await isAlreadyRegistered(
+    identifier,
+    purpose
+  );
+
+  if (alreadyRegistered) {
+    throw badRequest(
+      purpose === 'phone'
+        ? 'Phone number already registered'
+        : 'Email already registered'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // TEMPORARY PHONE OTP BYPASS
   // ---------------------------------------------------------------------------
+
   if (purpose === 'phone' && !PHONE_OTP_ENABLED) {
     if (!isValidNigeriaPhone(identifier)) {
       throw badRequest('Enter a valid Nigerian phone number');
@@ -61,8 +107,6 @@ async function requestOtp({ identifier, purpose }) {
       Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000
     );
 
-    // Keep a real OTP record so the normal verification infrastructure
-    // remains compatible when Sendchamp is enabled later.
     await pool.query(
       `INSERT INTO otp_codes
        (identifier, purpose, sendchamp_reference, otp_code_hash, expires_at, last_sent_at, verified)
@@ -87,6 +131,7 @@ async function requestOtp({ identifier, purpose }) {
   // ---------------------------------------------------------------------------
   // EXISTING OTP COOLDOWN
   // ---------------------------------------------------------------------------
+
   const { rows } = await pool.query(
     `SELECT * FROM otp_codes
      WHERE identifier = $1 AND purpose = $2
@@ -120,6 +165,7 @@ async function requestOtp({ identifier, purpose }) {
   // ---------------------------------------------------------------------------
   // PHONE -> SENDCHAMP
   // ---------------------------------------------------------------------------
+
   if (purpose === 'phone') {
     const sendchampResponse = await sendVerification({
       channel: 'sms',
@@ -146,6 +192,7 @@ async function requestOtp({ identifier, purpose }) {
   // ---------------------------------------------------------------------------
   // EMAIL -> RESEND
   // ---------------------------------------------------------------------------
+
   else {
     const code = generateOtp();
     const codeHash = hashOtp(code);
@@ -272,7 +319,8 @@ async function verifyOtp({ identifier, purpose, code }) {
 
 async function isVerified({ identifier, purpose }) {
   const { rows } = await pool.query(
-    `SELECT 1 FROM otp_codes
+    `SELECT 1
+     FROM otp_codes
      WHERE identifier = $1
        AND purpose = $2
        AND verified = TRUE

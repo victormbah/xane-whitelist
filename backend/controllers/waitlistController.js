@@ -5,8 +5,6 @@ const { deepLinkForUser } = require('../config/telegram');
 
 const {
   normalizeTag,
-  isValidTagFormat,
-  isValidPremiumTagFormat,
   isReserved,
   getTagValidationError,
   suggestAlternatives,
@@ -26,7 +24,6 @@ async function checkUsername(req, res, next) {
 
     const isPremium = type === 'premium';
 
-    // Give a specific validation message before normalizing.
     const validationError = getTagValidationError(rawTag, {
       premium: isPremium,
     });
@@ -52,6 +49,7 @@ async function checkUsername(req, res, next) {
       `SELECT 1
        FROM waitlist_users
        WHERE LOWER(xane_tag) = $1
+          OR LOWER(premium_xane_tag_requested) = $1
           OR LOWER(premium_xane_tag) = $1
        LIMIT 1`,
       [tag]
@@ -73,7 +71,7 @@ async function checkUsername(req, res, next) {
   }
 }
 
-// ---- Inline OTP -------------------------------------------------------------
+// ---- Inline OTP ------------------------------------------------------------
 
 async function requestOtp(req, res, next) {
   try {
@@ -131,10 +129,36 @@ async function joinWaitlist(req, res, next) {
       referralCode,
     } = req.body;
 
-    // Required fields
     if (!fullName || !phone || !email || !xaneTag) {
       return res.status(400).json({
         error: 'Full name, phone, email and XaneTag are required',
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // NORMALIZE BASIC VALUES
+    // -------------------------------------------------------------------------
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedPhone = String(phone).trim();
+
+    // -------------------------------------------------------------------------
+    // DUPLICATE PHONE / EMAIL
+    // -------------------------------------------------------------------------
+
+    const duplicateAccount = await pool.query(
+      `SELECT 1
+       FROM waitlist_users
+       WHERE LOWER(TRIM(email)) = $1
+          OR regexp_replace(phone, '\\D', '', 'g') =
+             regexp_replace($2, '\\D', '', 'g')
+       LIMIT 1`,
+      [normalizedEmail, normalizedPhone]
+    );
+
+    if (duplicateAccount.rows.length > 0) {
+      return res.status(409).json({
+        error: 'Phone or email already registered',
       });
     }
 
@@ -157,6 +181,23 @@ async function joinWaitlist(req, res, next) {
     if (isReserved(tag)) {
       return res.status(400).json({
         error: 'This XaneTag is reserved',
+      });
+    }
+
+    // Check ALL tag types, including pending premium reservations.
+    const freeTagTaken = await pool.query(
+      `SELECT 1
+       FROM waitlist_users
+       WHERE LOWER(xane_tag) = $1
+          OR LOWER(premium_xane_tag_requested) = $1
+          OR LOWER(premium_xane_tag) = $1
+       LIMIT 1`,
+      [tag]
+    );
+
+    if (freeTagTaken.rows.length > 0) {
+      return res.status(409).json({
+        error: 'XaneTag already registered',
       });
     }
 
@@ -219,11 +260,26 @@ async function joinWaitlist(req, res, next) {
         });
       }
 
-      // Don't allow the same tag to be requested as both
-      // the Free and Premium XaneTag.
       if (premiumTag === tag) {
         return res.status(400).json({
           error: 'Premium XaneTag must be different',
+        });
+      }
+
+      // Check pending + active premium tags AND free tags.
+      const premiumTagTaken = await pool.query(
+        `SELECT 1
+         FROM waitlist_users
+         WHERE LOWER(xane_tag) = $1
+            OR LOWER(premium_xane_tag_requested) = $1
+            OR LOWER(premium_xane_tag) = $1
+         LIMIT 1`,
+        [premiumTag]
+      );
+
+      if (premiumTagTaken.rows.length > 0) {
+        return res.status(409).json({
+          error: 'Premium XaneTag already registered',
         });
       }
 
@@ -275,8 +331,8 @@ async function joinWaitlist(req, res, next) {
        RETURNING *`,
       [
         fullName.trim(),
-        phone,
-        email.toLowerCase().trim(),
+        normalizedPhone,
+        normalizedEmail,
         tag,
         premiumTag,
         premiumDeadline,
