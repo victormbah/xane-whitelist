@@ -83,11 +83,13 @@ export function displayTag(tag: string): string {
 export async function requestOtp(
   identifier: string,
   purpose: OtpPurpose
-) {
-  return request<{
-    expiresInSeconds: number;
-    resendAfterSeconds: number;
-  }>("/api/waitlist/otp/request", {
+): Promise<{
+  verified?: boolean;
+  bypassed?: boolean;
+  expiresInSeconds?: number;
+  resendAfterSeconds: number;
+}> {
+  return request("/api/waitlist/otp/request", {
     method: "POST",
     body: JSON.stringify({
       identifier,

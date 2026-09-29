@@ -153,8 +153,19 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
       if (purpose === "phone") setPhoneOtpState("otp-sent");
       else setEmailOtpState("otp-sent");
       const result = await requestOtp(identifier, purpose);
-      if (purpose === "phone") setPhoneResendTimer(result.resendAfterSeconds);
-      else setEmailResendTimer(result.resendAfterSeconds);
+
+if (purpose === "phone") {
+  if (result.bypassed) {
+    setPhoneOtpState("verified");
+    setPhoneOtpCode("");
+    setPhoneResendTimer(0);
+    return;
+  }
+
+  setPhoneResendTimer(result.resendAfterSeconds);
+} else {
+  setEmailResendTimer(result.resendAfterSeconds);
+}
     } catch (error) {
       if (purpose === "phone") setPhoneOtpState("error");
       else setEmailOtpState("error");
