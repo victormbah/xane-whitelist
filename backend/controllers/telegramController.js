@@ -75,12 +75,35 @@ async function handleStartCommand(message) {
     [String(message.from.id), message.from.username || null, user.id]
   );
 
-  const groupInviteText = process.env.TELEGRAM_GROUP_ID
-    ? "Tap below to join the Xane community — once you're in, come back to the waitlist page and you'll see it confirmed."
-    : 'Join the Xane community group to finish your waitlist signup.';
+const groupInviteText = `
+<b>🎉 You're almost done!</b>
 
-  await sendMessage(message.chat.id, groupInviteText);
+Your Xane waitlist registration is connected to Telegram.
+
+To complete your signup:
+
+1. Tap the button below.
+2. Join the official Xane Community.
+3. Once you've joined, return to the waitlist page.
+
+We'll automatically confirm your Telegram membership.
+
+<b>Welcome to Xane. 🚀</b>
+`;
 }
+
+await sendMessage(message.chat.id, groupInviteText, {
+  reply_markup: {
+    inline_keyboard: [
+      [
+        {
+          text: 'Join Xane Community',
+          url: 'https://t.me/Xanecommunity',
+        },
+      ],
+    ],
+  },
+});
 
 async function handleChatMemberUpdate(chatMember) {
   if (String(chatMember.chat.id) !== String(GROUP_ID)) return;
