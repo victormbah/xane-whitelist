@@ -16,15 +16,28 @@ async function tryActivate(user) {
   await referralService.assignBasePosition(user.id);
 
   if (user.referred_by) {
-    await referralService.registerReferral({ referrerId: user.referred_by, referredUserId: user.id });
+    await referralService.registerReferral({
+      referrerId: user.referred_by,
+      referredUserId: user.id,
+    });
   }
 
-  await pool.query(`UPDATE waitlist_users SET status = 'active' WHERE id = $1`, [user.id]);
+  await pool.query(
+    `UPDATE waitlist_users SET status = 'active' WHERE id = $1`,
+    [user.id]
+  );
 
-  const { rows } = await pool.query(`SELECT * FROM waitlist_users WHERE id = $1`, [user.id]);
+  const { rows } = await pool.query(
+    `SELECT * FROM waitlist_users WHERE id = $1`,
+    [user.id]
+  );
+
   const activated = rows[0];
 
-  sendLevelUpEmail({ userId: activated.id, level: 'waitlist_member' }).catch((err) =>
+  sendLevelUpEmail({
+    userId: activated.id,
+    level: 'waitlist_member',
+  }).catch((err) =>
     console.error('Failed to send welcome email:', err.message)
   );
 
@@ -32,14 +45,7 @@ async function tryActivate(user) {
 }
 
 /**
- * Single webhook endpoint for all Telegram updates. Handles:
- *  - "/start <userId>" in a DM with the bot: links the Telegram account to
- *    the waitlist entry (not yet verified — that happens on group join).
- *  - chat_member updates in the community group: marks telegram_verified
- *    once that linked user actually joins.
- *
- * Register this URL with Telegram via setWebhook, and validate the secret
- * token Telegram sends back on every request (see middleware/telegramAuth.js).
+ * Single webhook endpoint for all Telegram updates.
  */
 async function handleWebhook(req, res, next) {
   try {
@@ -53,74 +59,93 @@ async function handleWebhook(req, res, next) {
       await handleChatMemberUpdate(update.chat_member);
     }
 
-    res.sendStatus(200); // Telegram just needs a 200 OK, fast
+    res.sendStatus(200);
   } catch (err) {
     console.error('Telegram webhook error:', err.message);
-    res.sendStatus(200); // still 200 so Telegram doesn't retry-storm us; log and move on
+    res.sendStatus(200);
   }
 }
 
 async function handleStartCommand(message) {
   const [, payloadUserId] = message.text.split(' ');
+
   if (!payloadUserId) return;
 
-  const { rows } = await pool.query(`SELECT * FROM waitlist_users WHERE id = $1`, [payloadUserId]);
+  const { rows } = await pool.query(
+    `SELECT * FROM waitlist_users WHERE id = $1`,
+    [payloadUserId]
+  );
+
   const user = rows[0];
+
   if (!user) return;
 
   await pool.query(
     `UPDATE waitlist_users
      SET telegram_user_id = $1, telegram_username = $2
      WHERE id = $3`,
-    [String(message.from.id), message.from.username || null, user.id]
+    [
+      String(message.from.id),
+      message.from.username || null,
+      user.id,
+    ]
   );
 
-const groupInviteText = `
+  const groupInviteText = `
 <b>🎉 You're almost done!</b>
 
-Your Xane waitlist registration is connected to Telegram.
+Your Xane waitlist account is connected to this Telegram account.
 
-To complete your signup:
+Join the official Xane Community using the button below.
 
-1. Tap the button below.
-2. Join the official Xane Community.
-3. Once you've joined, return to the waitlist page.
-
-We'll automatically confirm your Telegram membership.
+Once you've joined, return to the waitlist page — your membership will be verified automatically.
 
 <b>Welcome to Xane. 🚀</b>
 `;
-}
 
-await sendMessage(message.chat.id, groupInviteText, {
-  reply_markup: {
-    inline_keyboard: [
-      [
-        {
-          text: 'Join Xane Community',
-          url: 'https://t.me/Xanecommunity',
-        },
+  await sendMessage(message.chat.id, groupInviteText, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: 'Join Xane Community',
+            url: 'https://t.me/Xanecommunity',
+          },
+        ],
       ],
-    ],
-  },
-});
+    },
+  });
+}
 
 async function handleChatMemberUpdate(chatMember) {
   if (String(chatMember.chat.id) !== String(GROUP_ID)) return;
 
   const newStatus = chatMember.new_chat_member?.status;
-  if (!['member', 'administrator', 'creator'].includes(newStatus)) return;
+
+  if (!['member', 'administrator', 'creator'].includes(newStatus)) {
+    return;
+  }
 
   const telegramUserId = String(chatMember.new_chat_member.user.id);
+
   const { rows } = await pool.query(
     `SELECT * FROM waitlist_users WHERE telegram_user_id = $1`,
     [telegramUserId]
   );
+
   const user = rows[0];
+
   if (!user || user.telegram_verified) return;
 
-  await pool.query(`UPDATE waitlist_users SET telegram_verified = TRUE WHERE id = $1`, [user.id]);
-  await tryActivate({ ...user, telegram_verified: true });
+  await pool.query(
+    `UPDATE waitlist_users SET telegram_verified = TRUE WHERE id = $1`,
+    [user.id]
+  );
+
+  await tryActivate({
+    ...user,
+    telegram_verified: true,
+  });
 }
 
 module.exports = { handleWebhook };
