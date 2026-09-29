@@ -187,12 +187,14 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
     setFreeTag(value.replace(/^@/, "").replace(/\.xane$/i, "").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20));
   };
 
-  const handlePremiumTagChange = (value: string) => {
+ const handlePremiumTagChange = (value: string) => {
   setPremiumTag(
     value
       .replace(/^@/, "")
       .replace(/\.xane$/i, "")
-      .slice(0, 21)
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "")
+      .slice(0, 20)
   );
 };
 
