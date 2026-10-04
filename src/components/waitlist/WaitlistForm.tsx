@@ -347,6 +347,57 @@ if (purpose === "phone") {
   {/* {otpBox("phone")} */}
 </div>
 
+{/* Email */}
+<div className="space-y-1.5 text-left">
+  <label className="text-xs font-black tracking-wider text-[#111111] uppercase">
+    EMAIL ADDRESS
+  </label>
+
+  <div className="relative flex items-center">
+    <Mail
+      size={16}
+      className="pointer-events-none absolute left-3.5 text-gray-400"
+    />
+
+    <input
+      type="email"
+      required
+      disabled={
+        emailOtpState === "otp-sent" ||
+        emailOtpState === "verified" ||
+        emailOtpState === "verifying"
+      }
+      value={email}
+      onChange={(e) => handleEmailChange(e.target.value)}
+      placeholder="e.g your@mail.com"
+      className="w-full rounded-[14px] border border-gray-300 py-3 pl-10 pr-16 text-xs sm:text-sm font-medium outline-none transition-all placeholder:text-gray-400 focus:border-[#0047FF] focus:ring-4 focus:ring-[#0047FF]/10 disabled:bg-gray-50 disabled:text-gray-500"
+    />
+
+    {emailOtpState !== "verified" && (
+      <button
+        type="button"
+        disabled={
+          !validEmail ||
+          emailOtpState === "otp-sent" ||
+          emailOtpState === "verifying"
+        }
+        onClick={() => sendOtp("email")}
+        className="absolute right-2 rounded-full bg-[#0047FF] px-2.5 py-1 text-[10px] font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
+      >
+        Verify
+      </button>
+    )}
+
+    {emailOtpState === "verified" && (
+      <span className="absolute right-3 text-xs font-bold text-[#0047FF]">
+        Verified
+      </span>
+    )}
+  </div>
+
+  {otpBox("email")}
+</div>
+
 {/* XaneTag Type */}
 <div className="space-y-2 text-left">
   <label className="text-[11px] font-bold tracking-wider text-[#111111] uppercase">
