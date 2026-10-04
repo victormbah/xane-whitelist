@@ -35,6 +35,7 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
   const [email, setEmail] = useState("");
   const [freeTag, setFreeTag] = useState("");
   const [premiumTag, setPremiumTag] = useState("");
+  const [tagType, setTagType] = useState<"free" | "premium">("free");
 
   const [phoneOtpState, setPhoneOtpState] = useState<OtpState>("idle");
   const [phoneOtpCode, setPhoneOtpCode] = useState("");
@@ -98,6 +99,22 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
       window.clearTimeout(timer);
     };
   }, [normalizedFreeTag]);
+
+  useEffect(() => {
+  if (
+    phone.length !== 10 ||
+    phoneOtpState === "verified" ||
+    phoneOtpState === "verifying"
+  ) {
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    sendOtp("phone");
+  }, 500);
+
+  return () => clearTimeout(timer);
+}, [phone, phoneOtpState]);
 
   useEffect(() => {
     if (!normalizedPremiumTag) {
@@ -278,32 +295,246 @@ if (purpose === "phone") {
             <div className="relative flex items-center"><User size={19} className="pointer-events-none absolute left-4 text-gray-400" /><input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g your name" className="w-full rounded-[16px] border border-gray-300 py-3.5 pl-12 pr-4 text-sm sm:text-base font-medium outline-none transition-all placeholder:text-gray-400 focus:border-[#0047FF] focus:ring-4 focus:ring-[#0047FF]/10" /></div>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
-            <div className="space-y-1.5 text-left">
-              <label className="text-xs font-black tracking-wider text-[#111111] uppercase">PHONE NUMBER</label>
-              <div className="flex items-center gap-2"><span className="text-sm font-bold text-gray-600 whitespace-nowrap">+234</span><div className={`relative flex flex-1 items-center rounded-[16px] border bg-white ${phoneOtpState === "error" ? "border-red-500" : "border-gray-300 focus-within:border-[#0047FF] focus-within:ring-4 focus-within:ring-[#0047FF]/10"}`}><Phone size={17} className="pointer-events-none absolute left-3.5 text-gray-400" /><input type="tel" disabled={phoneOtpState === "otp-sent" || phoneOtpState === "verified" || phoneOtpState === "verifying"} value={phone} onChange={(e) => handlePhoneChange(e.target.value)} placeholder="e.g 8012345678" className="w-full rounded-[16px] bg-transparent py-3.5 pl-10 pr-16 text-xs sm:text-sm font-medium outline-none placeholder:text-gray-400 disabled:text-gray-500" />{phoneOtpState !== "verified" && <button type="button" disabled={phone.length !== 10 || phoneOtpState === "otp-sent" || phoneOtpState === "verifying"} onClick={() => sendOtp("phone")} className="absolute right-2 rounded-full bg-[#0047FF] px-2.5 py-1 text-[11px] font-bold text-white disabled:bg-gray-200 disabled:text-gray-400">Verify</button>}{phoneOtpState === "verified" && <span className="absolute right-3 text-xs font-bold text-[#0047FF]">Verified</span>}</div></div>
-              {otpBox("phone")}
-            </div>
+ <div className="space-y-1.5 text-left">
+  <label className="text-xs font-black tracking-wider text-[#111111] uppercase">
+    PHONE NUMBER
+  </label>
 
-            <div className="space-y-1.5 text-left">
-              <label className="text-[11px] font-bold tracking-wider text-[#111111] uppercase">EMAIL ADDRESS</label>
-              <div className="relative flex items-center"><Mail size={16} className="pointer-events-none absolute left-3.5 text-gray-400" /><input type="email" required disabled={emailOtpState === "otp-sent" || emailOtpState === "verified" || emailOtpState === "verifying"} value={email} onChange={(e) => handleEmailChange(e.target.value)} placeholder="e.g your@mail.com" className="w-full rounded-[14px] border border-gray-300 py-3 pl-10 pr-16 text-xs sm:text-sm font-medium outline-none transition-all placeholder:text-gray-400 focus:border-[#0047FF] focus:ring-4 focus:ring-[#0047FF]/10 disabled:bg-gray-50 disabled:text-gray-500" />{emailOtpState !== "verified" && <button type="button" disabled={!validEmail || emailOtpState === "otp-sent" || emailOtpState === "verifying"} onClick={() => sendOtp("email")} className="absolute right-2 rounded-full bg-[#0047FF] px-2.5 py-1 text-[10px] font-bold text-white disabled:bg-gray-200 disabled:text-gray-400">Verify</button>}{emailOtpState === "verified" && <span className="absolute right-3 text-xs font-bold text-[#0047FF]">Verified</span>}</div>
-              {otpBox("email")}
-            </div>
-          </div>
+  <div className="flex items-center gap-2">
+    <span className="text-sm font-bold text-gray-600 whitespace-nowrap">
+      +234
+    </span>
 
-          <div className="space-y-1 text-left">
-            <label className="text-[11px] font-bold tracking-wider text-[#111111] uppercase">FREE XANETAG</label>
-            <div className="relative flex items-center"><User size={18} className="pointer-events-none absolute left-3.5 text-gray-400" /><input type="text" required value={freeTag} onChange={(e) => handleFreeTagChange(e.target.value)} placeholder="e.g yourname_22" className={`w-full rounded-[14px] border py-3 pl-11 pr-28 text-sm font-medium outline-none transition-all placeholder:text-gray-400 focus:border-[#0047FF] focus:ring-4 focus:ring-[#0047FF]/10 ${freeTagState === "available" ? "border-emerald-400" : freeTagState === "taken" || freeTagState === "invalid" ? "border-red-400" : "border-gray-300"}`} /><span className="absolute right-3 text-xs font-bold text-gray-400">.xane</span></div>
-            <div className="flex items-center justify-between gap-2 text-[10px]"><p className="text-gray-400">5–20 lowercase letters, numbers or underscores.</p><span className={freeTagState === "available" ? "font-semibold text-emerald-600" : "font-semibold text-red-500"}>{freeTagState === "checking" ? "Checking..." : freeTagState !== "idle" ? tagMessage : ""}</span></div>
-          </div>
+    <div
+      className={`relative flex flex-1 items-center rounded-[16px] border bg-white ${
+        phoneOtpState === "error"
+          ? "border-red-500"
+          : "border-gray-300 focus-within:border-[#0047FF] focus-within:ring-4 focus-within:ring-[#0047FF]/10"
+      }`}
+    >
+      <Phone
+        size={17}
+        className="pointer-events-none absolute left-3.5 text-gray-400"
+      />
 
-          <div className="rounded-[18px] border border-[#0047FF]/30 bg-[#F0F5FF] p-4 text-left space-y-1.5">
-            <label className="text-[11px] font-bold tracking-wider text-[#0047FF] uppercase">PREMIUM XANETAG (OPTIONAL)</label>
-            <div className="relative flex items-center"><div className="pointer-events-none absolute left-3 flex h-6 w-6 items-center justify-center rounded-md bg-[#0047FF] p-1 shadow-sm"><img src={xaneIcon} alt="Xane" className="h-full w-full object-contain brightness-0 invert" /></div><span className="pointer-events-none absolute left-10 text-base font-black text-[#0047FF]">@</span><input type="text" value={premiumTag} onChange={(e) => handlePremiumTagChange(e.target.value)} placeholder="yourname" className={`w-full rounded-[12px] border bg-white py-2.5 pl-16 pr-16 text-xs sm:text-sm font-semibold outline-none placeholder:text-gray-400 focus:border-[#0047FF] focus:ring-4 focus:ring-[#0047FF]/15 ${premiumTagState === "available" ? "border-emerald-400" : premiumTagState === "taken" || premiumTagState === "invalid" ? "border-red-400" : "border-[#0047FF]/40"}`} /><span className="absolute right-3 text-xs font-bold text-[#0047FF]">.xane</span></div>
-            <div className="flex items-center justify-between gap-2 text-[10px]"><p className="font-medium text-gray-500">Refer 10 people in 14 days to own it.</p><span className={premiumTagState === "available" ? "font-semibold text-emerald-600" : "font-semibold text-red-500"}>{premiumTagState === "checking" ? "Checking..." : premiumTagState !== "idle" ? premiumMessage : ""}</span></div>
-          </div>
+      <input
+        type="tel"
+        disabled={
+          phoneOtpState === "verified" ||
+          phoneOtpState === "verifying"
+        }
+        value={phone}
+        onChange={(e) => handlePhoneChange(e.target.value)}
+        placeholder="e.g 8012345678"
+        className="w-full rounded-[16px] bg-transparent py-3.5 pl-10 pr-24 text-xs sm:text-sm font-medium outline-none placeholder:text-gray-400 disabled:text-gray-500"
+      />
 
+      {phoneOtpState === "verifying" && (
+        <span className="absolute right-3 text-xs font-bold text-gray-400">
+          Checking...
+        </span>
+      )}
+
+      {phoneOtpState === "verified" && (
+        <span className="absolute right-3 text-xs font-bold text-emerald-600">
+          Verified
+        </span>
+      )}
+    </div>
+  </div>
+
+  {/* Phone OTP temporarily hidden while PHONE_OTP_ENABLED=false */}
+  {/* {otpBox("phone")} */}
+</div>
+
+{/* XaneTag Type */}
+<div className="space-y-2 text-left">
+  <label className="text-[11px] font-bold tracking-wider text-[#111111] uppercase">
+    CHOOSE XANETAG
+  </label>
+
+  <div className="grid grid-cols-2 gap-2">
+    <label
+      className={`flex cursor-pointer items-center gap-2 rounded-[14px] border px-3 py-3 transition-all ${
+        tagType === "free"
+          ? "border-[#0047FF] bg-[#F0F5FF]"
+          : "border-gray-300 bg-white"
+      }`}
+    >
+      <input
+        type="radio"
+        name="tagType"
+        value="free"
+        checked={tagType === "free"}
+        onChange={() => setTagType("free")}
+        className="h-4 w-4 accent-[#0047FF]"
+      />
+
+      <div className="flex flex-col">
+        <span
+          className={`text-xs font-bold ${
+            tagType === "free" ? "text-[#0047FF]" : "text-gray-700"
+          }`}
+        >
+          Free XaneTag
+        </span>
+
+        <span className="text-[9px] text-gray-400">
+          Standard
+        </span>
+      </div>
+    </label>
+
+    <label
+      className={`flex cursor-pointer items-center gap-2 rounded-[14px] border px-3 py-3 transition-all ${
+        tagType === "premium"
+          ? "border-[#0047FF] bg-[#F0F5FF]"
+          : "border-gray-300 bg-white"
+      }`}
+    >
+      <input
+        type="radio"
+        name="tagType"
+        value="premium"
+        checked={tagType === "premium"}
+        onChange={() => setTagType("premium")}
+        className="h-4 w-4 accent-[#0047FF]"
+      />
+
+      <div className="flex flex-col">
+        <span
+          className={`text-xs font-bold ${
+            tagType === "premium" ? "text-[#0047FF]" : "text-gray-700"
+          }`}
+        >
+          Premium XaneTag
+        </span>
+
+        <span className="text-[9px] text-gray-400">
+          Refer 10 people
+        </span>
+      </div>
+    </label>
+  </div>
+</div>
+
+{/* Free XaneTag */}
+{tagType === "free" && (
+  <div className="space-y-1 text-left">
+    <label className="text-[11px] font-bold tracking-wider text-[#111111] uppercase">
+      FREE XANETAG
+    </label>
+
+    <div className="relative flex items-center">
+      <User
+        size={18}
+        className="pointer-events-none absolute left-3.5 text-gray-400"
+      />
+
+      <input
+        type="text"
+        required
+        value={freeTag}
+        onChange={(e) => handleFreeTagChange(e.target.value)}
+        placeholder="e.g yourname_22"
+        className={`w-full rounded-[14px] border py-3 pl-11 pr-28 text-sm font-medium outline-none transition-all placeholder:text-gray-400 focus:border-[#0047FF] focus:ring-4 focus:ring-[#0047FF]/10 ${
+          freeTagState === "available"
+            ? "border-emerald-400"
+            : freeTagState === "taken" || freeTagState === "invalid"
+              ? "border-red-400"
+              : "border-gray-300"
+        }`}
+      />
+
+      <span className="absolute right-3 text-xs font-bold text-gray-400">
+        .xane
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-2 text-[10px]">
+      <p className="text-gray-400">
+        5–20 lowercase letters, numbers or underscores.
+      </p>
+
+      <span
+        className={
+          freeTagState === "available"
+            ? "font-semibold text-emerald-600"
+            : "font-semibold text-red-500"
+        }
+      >
+        {freeTagState === "checking"
+          ? "Checking..."
+          : freeTagState !== "idle"
+            ? tagMessage
+            : ""}
+      </span>
+    </div>
+  </div>
+)}
+
+{/* Premium XaneTag */}
+{tagType === "premium" && (
+  <div className="rounded-[18px] border border-[#0047FF]/30 bg-[#F0F5FF] p-4 text-left space-y-1.5">
+    <label className="text-[11px] font-bold tracking-wider text-[#0047FF] uppercase">
+      PREMIUM XANETAG
+    </label>
+
+    <div className="relative flex items-center">
+      <div className="pointer-events-none absolute left-3 flex h-6 w-6 items-center justify-center rounded-md bg-[#0047FF] p-1 shadow-sm">
+        <img
+          src={xaneIcon}
+          alt="Xane"
+          className="h-full w-full object-contain brightness-0 invert"
+        />
+      </div>
+
+      <span className="pointer-events-none absolute left-10 text-base font-black text-[#0047FF]">
+        @
+      </span>
+
+      <input
+        type="text"
+        required
+        value={premiumTag}
+        onChange={(e) => handlePremiumTagChange(e.target.value)}
+        placeholder="yourname"
+        className={`w-full rounded-[12px] border bg-white py-2.5 pl-16 pr-16 text-xs sm:text-sm font-semibold outline-none placeholder:text-gray-400 focus:border-[#0047FF] focus:ring-4 focus:ring-[#0047FF]/15 ${
+          premiumTagState === "available"
+            ? "border-emerald-400"
+            : premiumTagState === "taken" ||
+                premiumTagState === "invalid"
+              ? "border-red-400"
+              : "border-[#0047FF]/40"
+        }`}
+      />
+
+      <span className="absolute right-3 text-xs font-bold text-[#0047FF]">
+        .xane
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-2 text-[10px]">
+      <p className="font-medium text-gray-500">
+        Refer 10 people in 14 days to own it.
+      </p>
+
+      <span
+        className={
+          premiumTagState === "available"
+            ? "font-semibold text-emerald-600"
+            : "font-semibold text-red-500"
+        }
+      >
+        {premiumTagState === "checking"
+          ? "Checking..."
+          : premiumTagState !== "idle"
+            ? premiumMessage
+            : ""}
+      </span>
+    </div>
+  </div>
+)}
           {referralCode && <p className="rounded-[12px] bg-blue-50 px-3 py-2 text-[11px] font-semibold text-[#0047FF]">Referral link detected — your signup will be credited to the referrer after activation.</p>}
           {formError && <div className="rounded-[14px] border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-600">{formError}</div>}
 
