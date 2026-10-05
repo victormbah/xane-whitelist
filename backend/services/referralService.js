@@ -76,12 +76,18 @@ async function registerReferral({ referrerId, referredUserId }) {
     }
 
     const { rows } = await client.query(
-      `UPDATE waitlist_users
-       SET referral_count = referral_count + 1
-       WHERE id = $1
-       RETURNING *`,
-      [referrerId]
-    );
+  `UPDATE waitlist_users
+   SET referral_count = referral_count + 1
+   WHERE id = $1
+     AND flagged = FALSE
+   RETURNING *`,
+  [referrerId]
+);
+
+if (rows.length === 0) {
+  await client.query('ROLLBACK');
+  return null;
+}
     const referrer = rows[0];
 
     const newPosition = computeDisplayPosition(referrer.base_position || 0, referrer.referral_count);

@@ -505,7 +505,7 @@ async function getMe(req, res, next) {
         : user.xane_tag || user.premium_xane_tag_requested;
 
     const referralLink =
-      `${process.env.FRONTEND_URL}/join?ref=${user.referral_code}`;
+      `${process.env.FRONTEND_URL}/waitlist?ref=${user.referral_code}`;
 
     res.json({
       xaneTag: activeTag,
@@ -554,7 +554,7 @@ async function getClimb(req, res, next) {
     const upcoming = nextLevel(currentLevelInfo.key);
 
     const referralLink =
-      `${process.env.FRONTEND_URL}/join?ref=${user.referral_code}`;
+      `${process.env.FRONTEND_URL}/waitlist?ref=${user.referral_code}`;
 
     res.json({
       position: user.position,

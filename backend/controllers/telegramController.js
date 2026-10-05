@@ -13,19 +13,21 @@ async function tryActivate(user) {
   if (user.status === 'active') return user;
   if (!(user.phone_verified && user.email_verified && user.telegram_verified)) return user;
 
-  await referralService.assignBasePosition(user.id);
+await referralService.assignBasePosition(user.id);
 
-  if (user.referred_by) {
-    await referralService.registerReferral({
-      referrerId: user.referred_by,
-      referredUserId: user.id,
-    });
-  }
+await pool.query(
+  `UPDATE waitlist_users
+   SET status = 'active'
+   WHERE id = $1`,
+  [user.id]
+);
 
-  await pool.query(
-    `UPDATE waitlist_users SET status = 'active' WHERE id = $1`,
-    [user.id]
-  );
+if (user.referred_by) {
+  await referralService.registerReferral({
+    referrerId: user.referred_by,
+    referredUserId: user.id,
+  });
+}
 
   const { rows } = await pool.query(
     `SELECT * FROM waitlist_users WHERE id = $1`,

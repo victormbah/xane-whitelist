@@ -20,5 +20,9 @@ router.post('/join', waitlistController.joinWaitlist);
 router.get('/telegram-status/:userId', waitlistController.telegramStatus);
 router.get('/me/:userId', waitlistController.getMe);
 router.get('/climb/:userId', waitlistController.getClimb);
+router.get(
+  '/referral-preview',
+  waitlistController.getReferralPreview
+);
 
 module.exports = router;
