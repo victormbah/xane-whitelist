@@ -116,6 +116,47 @@ async function verifyOtp(req, res, next) {
   }
 }
 
+// ---- Referral preview ------------------------------------------------------
+
+async function getReferralPreview(req, res, next) {
+  try {
+    const rawReferralCode = String(
+      req.query.ref || ''
+    ).trim();
+
+    if (!rawReferralCode) {
+      return res.status(400).json({
+        error: 'Referral code is required',
+      });
+    }
+
+    const normalizedReferralCode = normalizeTag(rawReferralCode);
+
+    const { rows } = await pool.query(
+      `SELECT full_name
+       FROM waitlist_users
+       WHERE referral_code = $1
+          OR LOWER(xane_tag) = $1
+          OR LOWER(premium_xane_tag_requested) = $1
+          OR LOWER(premium_xane_tag) = $1
+       LIMIT 1`,
+      [normalizedReferralCode]
+    );
+
+    if (!rows[0]) {
+      return res.status(404).json({
+        error: 'Referral not found',
+      });
+    }
+
+    return res.json({
+      referrerName: rows[0].full_name,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ---- Join waitlist ----------------------------------------------------------
 
 async function joinWaitlist(req, res, next) {
@@ -129,9 +170,15 @@ async function joinWaitlist(req, res, next) {
       referralCode,
     } = req.body;
 
-    if (!fullName || !phone || !email || !xaneTag) {
+    // A user must provide either a Free XaneTag OR a Premium XaneTag.
+    if (
+      !fullName ||
+      !phone ||
+      !email ||
+      (!xaneTag && !premiumXaneTag)
+    ) {
       return res.status(400).json({
-        error: 'Full name, phone, email and XaneTag are required',
+        error: 'Full name, phone, email and a XaneTag are required',
       });
     }
 
@@ -139,7 +186,7 @@ async function joinWaitlist(req, res, next) {
     // NORMALIZE BASIC VALUES
     // -------------------------------------------------------------------------
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = String(email).toLowerCase().trim();
     const normalizedPhone = String(phone).trim();
 
     // -------------------------------------------------------------------------
@@ -163,82 +210,76 @@ async function joinWaitlist(req, res, next) {
     }
 
     // -------------------------------------------------------------------------
+    // TAG SELECTION
+    // -------------------------------------------------------------------------
+
+    const hasFreeTag =
+      xaneTag !== undefined &&
+      xaneTag !== null &&
+      String(xaneTag).trim() !== '';
+
+    const hasPremiumTag =
+      premiumXaneTag !== undefined &&
+      premiumXaneTag !== null &&
+      String(premiumXaneTag).trim() !== '';
+
+    // Frontend should submit only one based on the selected radio button.
+    if (hasFreeTag && hasPremiumTag) {
+      return res.status(400).json({
+        error: 'Choose either a Free XaneTag or a Premium XaneTag',
+      });
+    }
+
+    let tag = null;
+    let premiumTag = null;
+    let premiumDeadline = null;
+
+    // -------------------------------------------------------------------------
     // FREE XANETAG
     // -------------------------------------------------------------------------
 
-    const freeTagError = getTagValidationError(xaneTag, {
-      premium: false,
-    });
-
-    if (freeTagError) {
-      return res.status(400).json({
-        error: freeTagError,
+    if (hasFreeTag) {
+      const freeTagError = getTagValidationError(xaneTag, {
+        premium: false,
       });
-    }
 
-    const tag = normalizeTag(xaneTag);
+      if (freeTagError) {
+        return res.status(400).json({
+          error: freeTagError,
+        });
+      }
 
-    if (isReserved(tag)) {
-      return res.status(400).json({
-        error: 'This XaneTag is reserved',
-      });
-    }
+      tag = normalizeTag(xaneTag);
 
-    // Check ALL tag types, including pending premium reservations.
-    const freeTagTaken = await pool.query(
-      `SELECT 1
-       FROM waitlist_users
-       WHERE LOWER(xane_tag) = $1
-          OR LOWER(premium_xane_tag_requested) = $1
-          OR LOWER(premium_xane_tag) = $1
-       LIMIT 1`,
-      [tag]
-    );
+      if (isReserved(tag)) {
+        return res.status(400).json({
+          error: 'This XaneTag is reserved',
+        });
+      }
 
-    if (freeTagTaken.rows.length > 0) {
-      return res.status(409).json({
-        error: 'XaneTag already registered',
-      });
-    }
+      // Check ALL tag types, including pending premium reservations.
+      const freeTagTaken = await pool.query(
+        `SELECT 1
+         FROM waitlist_users
+         WHERE LOWER(xane_tag) = $1
+            OR LOWER(premium_xane_tag_requested) = $1
+            OR LOWER(premium_xane_tag) = $1
+         LIMIT 1`,
+        [tag]
+      );
 
-    // -------------------------------------------------------------------------
-    // OTP VERIFICATION
-    // -------------------------------------------------------------------------
-
-    const phoneOk = await otpService.isVerified({
-      identifier: phone,
-      purpose: 'phone',
-    });
-
-    const emailOk = await otpService.isVerified({
-      identifier: email,
-      purpose: 'email',
-    });
-
-    if (!phoneOk) {
-      return res.status(400).json({
-        error: 'Phone is not verified yet',
-      });
-    }
-
-    if (!emailOk) {
-      return res.status(400).json({
-        error: 'Email is not verified yet',
-      });
+      if (freeTagTaken.rows.length > 0) {
+        return res.status(409).json({
+          error: 'XaneTag already registered',
+        });
+      }
     }
 
     // -------------------------------------------------------------------------
     // PREMIUM XANETAG
     // -------------------------------------------------------------------------
 
-    let premiumTag = null;
-    let premiumDeadline = null;
-
-    if (
-      premiumXaneTag !== undefined &&
-      premiumXaneTag !== null &&
-      String(premiumXaneTag).trim() !== ''
-    ) {
+    if (hasPremiumTag) {
       const premiumTagError = getTagValidationError(
         premiumXaneTag,
         {
@@ -257,12 +298,6 @@ async function joinWaitlist(req, res, next) {
       if (isReserved(premiumTag)) {
         return res.status(400).json({
           error: 'This premium XaneTag is reserved',
-        });
-      }
-
-      if (premiumTag === tag) {
-        return res.status(400).json({
-          error: 'Premium XaneTag must be different',
         });
       }
 
@@ -287,6 +322,32 @@ async function joinWaitlist(req, res, next) {
     }
 
     // -------------------------------------------------------------------------
+    // OTP VERIFICATION
+    // -------------------------------------------------------------------------
+
+    const phoneOk = await otpService.isVerified({
+      identifier: normalizedPhone,
+      purpose: 'phone',
+    });
+
+    const emailOk = await otpService.isVerified({
+      identifier: normalizedEmail,
+      purpose: 'email',
+    });
+
+    if (!phoneOk) {
+      return res.status(400).json({
+        error: 'Phone is not verified yet',
+      });
+    }
+
+    if (!emailOk) {
+      return res.status(400).json({
+        error: 'Email is not verified yet',
+      });
+    }
+
+    // -------------------------------------------------------------------------
     // REFERRAL
     // -------------------------------------------------------------------------
 
@@ -300,6 +361,8 @@ async function joinWaitlist(req, res, next) {
          FROM waitlist_users
          WHERE referral_code = $1
             OR LOWER(xane_tag) = $1
+            OR LOWER(premium_xane_tag_requested) = $1
+            OR LOWER(premium_xane_tag) = $1
          LIMIT 1`,
         [normalizedReferralCode]
       );
@@ -310,30 +373,59 @@ async function joinWaitlist(req, res, next) {
     }
 
     // -------------------------------------------------------------------------
+    // REFERRAL CODE
+    // -------------------------------------------------------------------------
+
+    /*
+     * Free user:
+     *   referral_code = free XaneTag
+     *
+     * Premium user:
+     *   referral_code = premium XaneTag
+     *
+     * This allows both types of users to have working referral links.
+     */
+
+    const userReferralCode = tag || premiumTag;
+
+    // -------------------------------------------------------------------------
     // CREATE WAITLIST USER
     // -------------------------------------------------------------------------
 
     const insertResult = await pool.query(
       `INSERT INTO waitlist_users
-        (
-          full_name,
-          phone,
-          phone_verified,
-          email,
-          email_verified,
-          xane_tag,
-          referral_code,
-          premium_xane_tag_requested,
-          premium_xane_tag_deadline,
-          referred_by
-        )
-       VALUES ($1, $2, TRUE, $3, TRUE, $4, $4, $5, $6, $7)
+       (
+         full_name,
+         phone,
+         phone_verified,
+         email,
+         email_verified,
+         xane_tag,
+         referral_code,
+         premium_xane_tag_requested,
+         premium_xane_tag_deadline,
+         referred_by
+       )
+       VALUES
+       (
+         $1,
+         $2,
+         TRUE,
+         $3,
+         TRUE,
+         $4,
+         $5,
+         $6,
+         $7,
+         $8
+       )
        RETURNING *`,
       [
         fullName.trim(),
         normalizedPhone,
         normalizedEmail,
         tag,
+        userReferralCode,
         premiumTag,
         premiumDeadline,
         referredBy,
@@ -344,7 +436,7 @@ async function joinWaitlist(req, res, next) {
 
     return res.status(201).json({
       userId: user.id,
-      xaneTag: user.xane_tag,
+      xaneTag: user.xane_tag || user.premium_xane_tag_requested,
       telegramDeepLink: deepLinkForUser(user.id),
     });
   } catch (err) {
@@ -410,7 +502,7 @@ async function getMe(req, res, next) {
     const activeTag =
       user.is_premium_tag_active && user.premium_xane_tag
         ? user.premium_xane_tag
-        : user.xane_tag;
+        : user.xane_tag || user.premium_xane_tag_requested;
 
     const referralLink =
       `${process.env.FRONTEND_URL}/join?ref=${user.referral_code}`;
@@ -487,10 +579,13 @@ async function getClimb(req, res, next) {
   }
 }
 
+// ---- Exports ----------------------------------------------------------------
+
 module.exports = {
   checkUsername,
   requestOtp,
   verifyOtp,
+  getReferralPreview,
   joinWaitlist,
   telegramStatus,
   getMe,
