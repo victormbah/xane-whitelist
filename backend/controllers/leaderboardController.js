@@ -23,8 +23,13 @@ async function getLeaderboard(req, res, next) {
 
     const { rows } = await pool.query(
       `SELECT
-         CASE WHEN is_premium_tag_active AND premium_xane_tag IS NOT NULL
-              THEN premium_xane_tag ELSE xane_tag END AS tag,
+         CASE
+  WHEN is_premium_tag_active AND premium_xane_tag IS NOT NULL
+    THEN premium_xane_tag
+  WHEN xane_tag IS NOT NULL
+    THEN xane_tag
+  ELSE premium_xane_tag_requested
+END AS tag,
          level,
          referral_count
        FROM waitlist_users
