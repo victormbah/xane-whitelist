@@ -1,28 +1,9 @@
 const { pool } = require('../config/db');
-
-const { sendchampClient } = require('../config/sendchamp');
+const { sendEmail } = require('../config/resend');
 const { TEMPLATES, NEXT_GOAL_COPY } = require('./emailTemplates');
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL || 'https://www.xane.app';
-
-// Transactional email endpoint
-const EMAIL_SEND_PATH = '/email/send';
-
-async function sendRawEmail({ toEmail, subject, html }) {
-  await sendchampClient.post(EMAIL_SEND_PATH, {
-    subject,
-    sender: {
-      email: 'hello@xane.app',
-      name: 'Xane',
-    },
-    to: [{ email: toEmail }],
-    message_body: {
-      type: 'text/html',
-      value: html,
-    },
-  });
-}
 
 /**
  * Sends the milestone email for a given level.
@@ -75,28 +56,51 @@ async function sendLevelUpEmail({ userId, level }) {
       `${FRONTEND_URL}/leaderboard`
     );
 
-  try {
-    await pool.query(
-      `INSERT INTO level_up_emails_sent (user_id, level)
-       VALUES ($1, $2)`,
-      [userId, level]
-    );
-  } catch (err) {
-    if (err.code === '23505') {
-      return;
-    }
+  /*
+   * Check whether this milestone email has already been sent.
+   * We do this BEFORE sending so a failed email can be retried.
+   */
+  const existing = await pool.query(
+    `SELECT 1
+     FROM level_up_emails_sent
+     WHERE user_id = $1
+       AND level = $2
+     LIMIT 1`,
+    [userId, level]
+  );
 
-    throw err;
+  if (existing.rowCount > 0) {
+    return;
   }
 
-  await sendRawEmail({
+  /*
+   * Send the email through Resend.
+   */
+  await sendEmail({
     toEmail: user.email,
     subject,
     html: finalHtml,
   });
+
+  /*
+   * Only record the milestone AFTER Resend successfully accepts
+   * the email.
+   */
+  try {
+    await pool.query(
+      `INSERT INTO level_up_emails_sent (user_id, level)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id, level) DO NOTHING`,
+      [userId, level]
+    );
+  } catch (err) {
+    console.error(
+      'Failed to record level-up email:',
+      err.message
+    );
+  }
 }
 
 module.exports = {
   sendLevelUpEmail,
-  sendRawEmail,
 };
