@@ -130,7 +130,9 @@ async function getReferralPreview(req, res, next) {
       });
     }
 
-    const normalizedReferralCode = normalizeTag(rawReferralCode);
+    const normalizedReferralCode = normalizeTag(
+      rawReferralCode
+    );
 
     const { rows } = await pool.query(
       `SELECT full_name
@@ -157,7 +159,7 @@ async function getReferralPreview(req, res, next) {
   }
 }
 
-// ---- Join waitlist ----------------------------------------------------------
+// ---- Join waitlist ---------------------------------------------------------
 
 async function joinWaitlist(req, res, next) {
   try {
@@ -170,48 +172,91 @@ async function joinWaitlist(req, res, next) {
       referralCode,
     } = req.body;
 
-    // A user must provide either a Free XaneTag OR a Premium XaneTag.
+    // -----------------------------------------------------------------------
+    // PHONE TEMPORARILY DISABLED
+    //
+    // OLD VALIDATION:
+    //
+    // if (
+    //   !fullName ||
+    //   !phone ||
+    //   !email ||
+    //   (!xaneTag && !premiumXaneTag)
+    // ) {
+    //   return res.status(400).json({
+    //     error: 'Full name, phone, email and a XaneTag are required',
+    //   });
+    // }
+    //
+    // Phone is intentionally not required while it is removed from the UX.
+    // -----------------------------------------------------------------------
+
     if (
       !fullName ||
-      !phone ||
       !email ||
       (!xaneTag && !premiumXaneTag)
     ) {
       return res.status(400).json({
-        error: 'Full name, phone, email and a XaneTag are required',
+        error: 'Full name, email and a XaneTag are required',
       });
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // NORMALIZE BASIC VALUES
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
-    const normalizedEmail = String(email).toLowerCase().trim();
-    const normalizedPhone = String(phone).trim();
+    const normalizedEmail = String(email)
+      .toLowerCase()
+      .trim();
 
-    // -------------------------------------------------------------------------
+    // PHONE TEMPORARILY DISABLED
+    //
+    // Old phone normalization:
+    //
+    // const normalizedPhone = String(phone).trim();
+
+    // -----------------------------------------------------------------------
     // DUPLICATE PHONE / EMAIL
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
+    // PHONE TEMPORARILY DISABLED
+    //
+    // Old duplicate phone + email check:
+    //
+    // const duplicateAccount = await pool.query(
+    //   `SELECT 1
+    //    FROM waitlist_users
+    //    WHERE LOWER(TRIM(email)) = $1
+    //       OR regexp_replace(phone, '\\D', '', 'g') =
+    //          regexp_replace($2, '\\D', '', 'g')
+    //    LIMIT 1`,
+    //   [normalizedEmail, normalizedPhone]
+    // );
+    //
+    // if (duplicateAccount.rows.length > 0) {
+    //   return res.status(409).json({
+    //     error: 'Phone or email already registered',
+    //   });
+    // }
+
+    // Temporary email-only duplicate check.
     const duplicateAccount = await pool.query(
       `SELECT 1
        FROM waitlist_users
        WHERE LOWER(TRIM(email)) = $1
-          OR regexp_replace(phone, '\\D', '', 'g') =
-             regexp_replace($2, '\\D', '', 'g')
        LIMIT 1`,
-      [normalizedEmail, normalizedPhone]
+      [normalizedEmail]
     );
 
     if (duplicateAccount.rows.length > 0) {
       return res.status(409).json({
-        error: 'Phone or email already registered',
+        error: 'Email already registered',
       });
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // TAG SELECTION
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     const hasFreeTag =
       xaneTag !== undefined &&
@@ -226,7 +271,8 @@ async function joinWaitlist(req, res, next) {
     // Frontend should submit only one based on the selected radio button.
     if (hasFreeTag && hasPremiumTag) {
       return res.status(400).json({
-        error: 'Choose either a Free XaneTag or a Premium XaneTag',
+        error:
+          'Choose either a Free XaneTag or a Premium XaneTag',
       });
     }
 
@@ -234,9 +280,9 @@ async function joinWaitlist(req, res, next) {
     let premiumTag = null;
     let premiumDeadline = null;
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // FREE XANETAG
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     if (hasFreeTag) {
       const freeTagError = getTagValidationError(xaneTag, {
@@ -275,9 +321,9 @@ async function joinWaitlist(req, res, next) {
       }
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // PREMIUM XANETAG
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     if (hasPremiumTag) {
       const premiumTagError = getTagValidationError(
@@ -321,25 +367,30 @@ async function joinWaitlist(req, res, next) {
       premiumDeadline = referralService.premiumTagDeadline();
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // OTP VERIFICATION
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
-    const phoneOk = await otpService.isVerified({
-      identifier: normalizedPhone,
-      purpose: 'phone',
-    });
+    // PHONE TEMPORARILY DISABLED
+    //
+    // Old phone OTP verification:
+    //
+    // const phoneOk = await otpService.isVerified({
+    //   identifier: normalizedPhone,
+    //   purpose: 'phone',
+    // });
+    //
+    // if (!phoneOk) {
+    //   return res.status(400).json({
+    //     error: 'Phone is not verified yet',
+    //   });
+    // }
 
+    // Email verification remains required.
     const emailOk = await otpService.isVerified({
       identifier: normalizedEmail,
       purpose: 'email',
     });
-
-    if (!phoneOk) {
-      return res.status(400).json({
-        error: 'Phone is not verified yet',
-      });
-    }
 
     if (!emailOk) {
       return res.status(400).json({
@@ -347,14 +398,15 @@ async function joinWaitlist(req, res, next) {
       });
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // REFERRAL
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     let referredBy = null;
 
     if (referralCode) {
-      const normalizedReferralCode = normalizeTag(referralCode);
+      const normalizedReferralCode =
+        normalizeTag(referralCode);
 
       const { rows } = await pool.query(
         `SELECT id
@@ -372,9 +424,9 @@ async function joinWaitlist(req, res, next) {
       }
     }
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // REFERRAL CODE
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
 
     /*
      * Free user:
@@ -388,15 +440,38 @@ async function joinWaitlist(req, res, next) {
 
     const userReferralCode = tag || premiumTag;
 
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // CREATE WAITLIST USER
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+
+    /*
+     * PHONE TEMPORARILY DISABLED
+     *
+     * Old insert fields:
+     *
+     * phone,
+     * phone_verified,
+     *
+     * Old values:
+     *
+     * normalizedPhone,
+     * TRUE,
+     *
+     * These are intentionally commented out for now.
+     *
+     * We keep phone_verified = TRUE temporarily below so the existing
+     * Telegram activation flow can continue working while phone is removed
+     * from the signup UX.
+     */
 
     const insertResult = await pool.query(
       `INSERT INTO waitlist_users
        (
          full_name,
-         phone,
+
+         -- PHONE TEMPORARILY DISABLED:
+         -- phone,
+
          phone_verified,
          email,
          email_verified,
@@ -409,20 +484,26 @@ async function joinWaitlist(req, res, next) {
        VALUES
        (
          $1,
+
+         -- PHONE TEMPORARILY DISABLED:
+         -- $2,
+
+         TRUE,
          $2,
          TRUE,
          $3,
-         TRUE,
          $4,
          $5,
          $6,
-         $7,
-         $8
+         $7
        )
        RETURNING *`,
       [
         fullName.trim(),
-        normalizedPhone,
+
+        // PHONE TEMPORARILY DISABLED:
+        // normalizedPhone,
+
         normalizedEmail,
         tag,
         userReferralCode,
@@ -436,13 +517,19 @@ async function joinWaitlist(req, res, next) {
 
     return res.status(201).json({
       userId: user.id,
-      xaneTag: user.xane_tag || user.premium_xane_tag_requested,
+      xaneTag:
+        user.xane_tag ||
+        user.premium_xane_tag_requested,
       telegramDeepLink: deepLinkForUser(user.id),
     });
   } catch (err) {
     if (err.code === '23505') {
+      // Old message when phone was part of signup:
+      //
+      // error: 'Phone, email or XaneTag already registered',
+
       return res.status(409).json({
-        error: 'Phone, email or XaneTag already registered',
+        error: 'Email or XaneTag already registered',
       });
     }
 
@@ -500,12 +587,17 @@ async function getMe(req, res, next) {
     }
 
     const activeTag =
-      user.is_premium_tag_active && user.premium_xane_tag
+      user.is_premium_tag_active &&
+      user.premium_xane_tag
         ? user.premium_xane_tag
-        : user.xane_tag || user.premium_xane_tag_requested;
+        : user.xane_tag ||
+          user.premium_xane_tag_requested;
 
-    const referralLink =
-      `${process.env.FRONTEND_URL}/waitlist?ref=${user.referral_code}`;
+    const referralLink = user.referral_code
+      ? `${process.env.FRONTEND_URL}/waitlist?ref=${encodeURIComponent(
+          user.referral_code
+        )}`
+      : `${process.env.FRONTEND_URL}/waitlist`;
 
     res.json({
       xaneTag: activeTag,
@@ -553,8 +645,11 @@ async function getClimb(req, res, next) {
 
     const upcoming = nextLevel(currentLevelInfo.key);
 
-    const referralLink =
-      `${process.env.FRONTEND_URL}/waitlist?ref=${user.referral_code}`;
+    const referralLink = user.referral_code
+      ? `${process.env.FRONTEND_URL}/waitlist?ref=${encodeURIComponent(
+          user.referral_code
+        )}`
+      : `${process.env.FRONTEND_URL}/waitlist`;
 
     res.json({
       position: user.position,
@@ -566,7 +661,8 @@ async function getClimb(req, res, next) {
             ...upcoming,
             referralsNeeded: Math.max(
               0,
-              upcoming.threshold - user.referral_count
+              upcoming.threshold -
+                user.referral_count
             ),
           }
         : null,
