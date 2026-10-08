@@ -135,7 +135,7 @@ export async function checkXaneTag(
 
 export async function joinWaitlist(payload: {
   fullName: string;
-  phone: string;
+  //phone: string;
   email: string;
   xaneTag: string;
   premiumXaneTag?: string;
@@ -198,6 +198,17 @@ export async function getClimb(userId: string) {
     referralLink: string;
   }>(
     `/api/waitlist/climb/${encodeURIComponent(userId)}`
+  );
+}
+
+export async function getReferralPreview(referralCode: string) {
+  return request<{
+    referrerTag: string;
+    referrerName: string;
+  }>(
+    `/api/waitlist/referral-preview?ref=${encodeURIComponent(
+      referralCode
+    )}`
   );
 }
 

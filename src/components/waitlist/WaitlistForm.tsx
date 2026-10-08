@@ -226,7 +226,6 @@ if (purpose === "phone") {
     try {
       const result = await joinWaitlist({
         fullName: fullName.trim(),
-        phone: normalizedPhone,
         email: email.trim().toLowerCase(),
         xaneTag: normalizedFreeTag,
         premiumXaneTag: normalizedPremiumTag || undefined,

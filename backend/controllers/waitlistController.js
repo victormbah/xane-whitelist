@@ -120,39 +120,37 @@ async function verifyOtp(req, res, next) {
 
 async function getReferralPreview(req, res, next) {
   try {
-    const rawReferralCode = String(
-      req.query.ref || ''
-    ).trim();
+    const referralCode = String(req.query.ref || "").trim().toLowerCase();
 
-    if (!rawReferralCode) {
+    if (!referralCode) {
       return res.status(400).json({
-        error: 'Referral code is required',
+        message: "Referral code is required.",
       });
     }
 
-    const normalizedReferralCode = normalizeTag(
-      rawReferralCode
-    );
-
     const { rows } = await pool.query(
-      `SELECT full_name
+      `SELECT
+         CASE
+           WHEN is_premium_tag_active AND premium_xane_tag IS NOT NULL
+             THEN premium_xane_tag
+           WHEN xane_tag IS NOT NULL
+             THEN xane_tag
+           ELSE premium_xane_tag_requested
+         END AS referrer_tag
        FROM waitlist_users
        WHERE referral_code = $1
-          OR LOWER(xane_tag) = $1
-          OR LOWER(premium_xane_tag_requested) = $1
-          OR LOWER(premium_xane_tag) = $1
        LIMIT 1`,
-      [normalizedReferralCode]
+      [referralCode]
     );
 
     if (!rows[0]) {
       return res.status(404).json({
-        error: 'Referral not found',
+        message: "Referral not found.",
       });
     }
 
     return res.json({
-      referrerName: rows[0].full_name,
+      referrerTag: rows[0].referrer_tag,
     });
   } catch (err) {
     next(err);
