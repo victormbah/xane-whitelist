@@ -59,22 +59,21 @@ function emailLayout({
 
           <!-- Brand header -->
           <tr>
-            <td style="background-color:#0b1020;padding:30px 30px 34px;">
+            <td style="background-color:#245cff;padding:30px 30px 34px;">
 
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  <td align="left" style="font-size:25px;font-weight:800;letter-spacing:-1px;color:#ffffff;">
-                    XANE<span style="color:#4b83ff;">.</span>
-                  </td>
-                  <td align="right" style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#b6c4e4;">
-                    BUILT FOR WHAT'S NEXT
-                  </td>
-                </tr>
-              </table>
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+  <tr>
+    <td align="left" style="font-size:25px;font-weight:800;letter-spacing:-1px;color:#ffffff;">
+      XANE<span style="color:#4b83ff;">.</span>
+    </td>
+  </tr>
+</table>
+
 
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-top:38px;">
                 <tr>
-                  <td style="background-color:#19294b;border:1px solid #304b7c;border-radius:20px;padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#9fc0ff;">
+                  <td style="background-color:#ffffff;border:1px solid #ffffff;border-radius:20px;padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#245cff;">
                     ${escapeHtml(eyebrow)}
                   </td>
                 </tr>
@@ -147,76 +146,42 @@ function emailLayout({
               ${
                 referralButton
                   ? `
-              <!-- Referral CTA -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:25px;">
+              <!-- Copyable Referral Link -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                style="margin-top:25px;background-color:#f4f7ff;border:1px solid #dce6ff;border-radius:12px;">
                 <tr>
-                  <td align="center" bgcolor="#245cff" style="border-radius:10px;">
-                    <a href="{{referralLink}}" target="_blank" style="display:block;padding:16px 20px;font-size:14px;line-height:1.4;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;">
-                      Share your referral link &nbsp; &#8594;
-                    </a>
-                  </td>
-                </tr>
-              </table>
+                  <td style="padding:20px;">
+                    <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#172033;">
+                      Your personal referral link
+                    </p>
 
-              <p style="margin:12px 0 0;text-align:center;font-size:11px;line-height:1.8;color:#8490a4;">
-                Your personal link is always available through your Xane waitlist account.
-              </p>
-              `
-                  : ''
-              }
+                    <p style="margin:0;padding:14px;background-color:#ffffff;border:1px solid #dce6ff;border-radius:8px;font-size:13px;line-height:1.8;overflow-wrap:anywhere;word-break:break-word;">
+                      <a href="{{referralLink}}" style="color:#245cff;text-decoration:none;">
+                        {{referralLink}}
+                      </a>
+                    </p>
 
-              <!-- Community link -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:27px;">
-                <tr>
-                  <td style="border-top:1px solid #e9edf4;padding-top:22px;">
-                    <p style="margin:0;font-size:13px;line-height:1.8;color:#59667b;">
-                      Want to see what's next?
-                      <a href="{{leaderboardLink}}" target="_blank" style="color:#245cff;font-weight:700;text-decoration:underline;">
-                        Explore your progress
-                      </a>.
+                    <p style="margin:12px 0 0;font-size:12px;line-height:1.8;color:#59667b;">
+                      Copy this link and send it to your friends. When they join through your link, their registrations can count toward your referrals.
                     </p>
                   </td>
                 </tr>
               </table>
+              `
+                  : ''
+              }
 
             </td>
           </tr>
-
-          <!-- Footer -->
           <tr>
-            <td style="padding:22px 30px 28px;background-color:#f8f9fc;">
-
-              <p style="margin:0 0 10px;font-size:13px;font-weight:800;letter-spacing:-0.2px;color:#172033;">
-                XANE<span style="color:#245cff;">.</span>
-              </p>
-
-              <p style="margin:0;font-size:11px;line-height:1.8;color:#7d889c;">
-                ${escapeHtml(footerNote)}
-              </p>
-
-              <p style="margin:14px 0 0;font-size:11px;color:#7d889c;">
-                <a href="${escapeHtml(FRONTEND_URL)}" target="_blank" style="color:#59667b;text-decoration:underline;">Visit Xane</a>
-                &nbsp;&nbsp;·&nbsp;&nbsp;
-                <a href="{{leaderboardLink}}" target="_blank" style="color:#59667b;text-decoration:underline;">Waitlist progress</a>
-              </p>
-
-              <p style="margin:17px 0 0;font-size:10px;line-height:1.7;color:#a0a9b8;">
-                &copy; ${new Date().getFullYear()} Xane. All rights reserved.
-              </p>
-
+            <td style="padding:18px 30px 28px;font-size:11px;line-height:1.7;color:#77839a;">
+              ${escapeHtml(footerNote)}
             </td>
           </tr>
-
         </table>
-
-        <p style="max-width:540px;margin:18px 10px 0;font-size:10px;line-height:1.8;text-align:center;color:#8993a5;">
-          Your next chapter starts here.
-        </p>
-
       </td>
     </tr>
   </table>
-
 </body>
 </html>`;
 }

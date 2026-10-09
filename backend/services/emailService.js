@@ -69,15 +69,22 @@ function premiumEmailTemplate({ tag, title, message, buttonText, referralLink })
                       Your target is <strong>10 successful referrals within 14 days</strong>.
                       Your referral link is ready to share.
                     </p>
-                    <div style="text-align:center;margin:28px 0;">
-                      <a href="${safeLink}" style="display:inline-block;background:#315cf5;color:#ffffff;text-decoration:none;padding:15px 25px;border-radius:9px;font-weight:700;font-size:14px;">
-                        ${safeButtonText}
-                      </a>
-                    </div>
-                    <p style="font-size:13px;line-height:1.7;color:#64748b;word-break:break-word;">
-                      If the button doesn't work, copy this link:<br>
-                      <a href="${safeLink}" style="color:#315cf5;">${safeLink}</a>
-                    </p>
+<div style="margin:28px 0;padding:20px;background:#f3f6ff;border:1px solid #dce5ff;border-radius:12px;">
+  <p style="font-size:14px;font-weight:700;color:#10172a;margin:0 0 12px;">
+    Your personal referral link
+  </p>
+
+  <div style="background:#ffffff;border:1px solid #dce5ff;border-radius:8px;padding:14px;word-break:break-all;font-size:14px;line-height:1.7;">
+    <a href="${safeLink}" style="color:#315cf5;text-decoration:none;">
+      ${safeLink}
+    </a>
+  </div>
+
+  <p style="font-size:13px;line-height:1.7;color:#64748b;margin:12px 0 0;">
+    Copy the link above and share it with your friends. When they join through your link, their registrations can count toward your referrals.
+  </p>
+</div>
+
                     <p style="font-size:14px;line-height:1.8;color:#374151;margin-top:28px;">
                       Keep sharing. Your referrals bring you closer to becoming a Xane Advocate.
                     </p>
