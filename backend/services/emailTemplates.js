@@ -1,6 +1,9 @@
 const FRONTEND_URL =
   process.env.FRONTEND_URL || 'https://www.xane.app';
 
+const SHARE_TEXT =
+  'Join me on the Xane waitlist and reserve your XaneTag before launch.';
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -18,6 +21,75 @@ function formatPosition(position) {
   }
 
   return `#${numericPosition.toLocaleString('en-US')}`;
+}
+
+/**
+ * Builds one-tap share URLs for a referral link.
+ * Email clients can't run JavaScript, so a true "copy to clipboard" button
+ * isn't possible. Share buttons are the next best thing: one tap opens
+ * WhatsApp / Telegram with the message and link already filled in.
+ */
+function buildShareLinks(referralLink) {
+  return {
+    whatsapp: `https://wa.me/?text=${encodeURIComponent(`${SHARE_TEXT} ${referralLink}`)}`,
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(SHARE_TEXT)}`,
+  };
+}
+
+/**
+ * The "Share your link" card used by every email that carries a referral link.
+ * Values are HTML-escaped here. When called with {{placeholders}}, the caller
+ * must escape the real values it swaps in afterwards.
+ */
+function shareLinkBlock({ referralLink, whatsapp, telegram }) {
+  const safeLink = escapeHtml(referralLink);
+  const safeWhatsapp = escapeHtml(whatsapp);
+  const safeTelegram = escapeHtml(telegram);
+
+  return `
+              <!-- Share your link -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                style="margin-top:25px;background-color:#f4f7ff;border:1px solid #dce6ff;border-radius:12px;">
+                <tr>
+                  <td style="padding:20px;">
+                    <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#172033;">
+                      Share your link
+                    </p>
+
+                    <p style="margin:0 0 16px;font-size:12px;line-height:1.8;color:#59667b;">
+                      Tap a button to send your link to friends. When they join through it, their registrations can count toward your referrals.
+                    </p>
+
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td align="center" bgcolor="#245cff" style="background-color:#245cff;border-radius:12px;">
+                          <a href="${safeWhatsapp}" target="_blank"
+                            style="display:block;padding:15px 20px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px;">
+                            Share on WhatsApp
+                          </a>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td height="10" style="font-size:0;line-height:0;">&nbsp;</td>
+                      </tr>
+                      <tr>
+                        <td align="center" style="background-color:#ffffff;border:2px solid #245cff;border-radius:12px;">
+                          <a href="${safeTelegram}" target="_blank"
+                            style="display:block;padding:13px 20px;font-size:15px;font-weight:700;color:#245cff;text-decoration:none;border-radius:12px;">
+                            Share on Telegram
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:16px 0 0;font-size:12px;line-height:1.8;color:#59667b;overflow-wrap:anywhere;word-break:break-word;">
+                      Prefer to copy it yourself?
+                      <a href="${safeLink}" style="color:#245cff;text-decoration:none;">${safeLink}</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+  `;
 }
 
 function emailLayout({
@@ -145,29 +217,11 @@ function emailLayout({
 
               ${
                 referralButton
-                  ? `
-              <!-- Copyable Referral Link -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-                style="margin-top:25px;background-color:#f4f7ff;border:1px solid #dce6ff;border-radius:12px;">
-                <tr>
-                  <td style="padding:20px;">
-                    <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#172033;">
-                      Your personal referral link
-                    </p>
-
-                    <p style="margin:0;padding:14px;background-color:#ffffff;border:1px solid #dce6ff;border-radius:8px;font-size:13px;line-height:1.8;overflow-wrap:anywhere;word-break:break-word;">
-                      <a href="{{referralLink}}" style="color:#245cff;text-decoration:none;">
-                        {{referralLink}}
-                      </a>
-                    </p>
-
-                    <p style="margin:12px 0 0;font-size:12px;line-height:1.8;color:#59667b;">
-                      Copy this link and send it to your friends. When they join through your link, their registrations can count toward your referrals.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-              `
+                  ? shareLinkBlock({
+                      referralLink: '{{referralLink}}',
+                      whatsapp: '{{whatsappShareLink}}',
+                      telegram: '{{telegramShareLink}}',
+                    })
                   : ''
               }
 
@@ -366,4 +420,6 @@ module.exports = {
   TEMPLATES,
   NEXT_GOAL_COPY,
   formatPosition,
+  shareLinkBlock,
+  buildShareLinks,
 };

@@ -1,6 +1,10 @@
 const { pool } = require('../config/db');
 const { sendEmail } = require('../config/resend');
-const { TEMPLATES, NEXT_GOAL_COPY } = require('./emailTemplates');
+const {
+  TEMPLATES,
+  NEXT_GOAL_COPY,
+  buildShareLinks,
+} = require('./emailTemplates');
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL || 'https://www.xane.app';
@@ -21,12 +25,50 @@ function getReferralLink(user) {
     : `${FRONTEND_URL}/waitlist`;
 }
 
-function premiumEmailTemplate({ tag, title, message, buttonText, referralLink }) {
+/**
+ * Replaces referral placeholders with safely escaped, user-specific links.
+ */
+function injectReferralLinks(html, referralLink) {
+  const shareLinks = buildShareLinks(referralLink);
+
+  return html
+    .replaceAll(
+      '{{referralLink}}',
+      escapeHtml(referralLink)
+    )
+    .replaceAll(
+      '{{whatsappShareLink}}',
+      escapeHtml(shareLinks.whatsapp)
+    )
+    .replaceAll(
+      '{{telegramShareLink}}',
+      escapeHtml(shareLinks.telegram)
+    )
+    .replaceAll(
+      '{{leaderboardLink}}',
+      escapeHtml(`${FRONTEND_URL}/leaderboard`)
+    );
+}
+
+/**
+ * Premium XaneTag email template.
+ * Uses the same light-blue branding as the waitlist emails.
+ * No slogan is displayed in the header.
+ */
+function premiumEmailTemplate({
+  tag,
+  title,
+  message,
+  referralLink,
+}) {
   const safeTag = escapeHtml(tag);
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(message).replace(/\n/g, '<br>');
-  const safeButtonText = escapeHtml(buttonText);
   const safeLink = escapeHtml(referralLink);
+
+  const shareLinks = buildShareLinks(referralLink);
+  const safeWhatsapp = escapeHtml(shareLinks.whatsapp);
+  const safeTelegram = escapeHtml(shareLinks.telegram);
 
   return `
     <!DOCTYPE html>
@@ -34,70 +76,128 @@ function premiumEmailTemplate({ tag, title, message, buttonText, referralLink })
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light">
+        <meta name="supported-color-schemes" content="light">
+        <title>${safeTitle}</title>
       </head>
+
       <body style="margin:0;padding:0;background:#f3f5fa;font-family:Arial,Helvetica,sans-serif;color:#111827;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f5fa;padding:32px 12px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f5fa;padding:32px 12px;">
           <tr>
             <td align="center">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;">
+
+                <!-- Light-blue XANE header -->
                 <tr>
-                  <td style="background:#10172a;padding:28px 32px;">
-                    <div style="font-size:25px;font-weight:800;letter-spacing:3px;color:#ffffff;">XANE</div>
-                    <div style="margin-top:8px;font-size:12px;letter-spacing:2px;color:#a8b7d9;">YOUR NAME. YOUR PLACE.</div>
+                  <td style="background:#245cff;padding:28px 32px;">
+                    <div style="font-size:25px;font-weight:800;letter-spacing:3px;color:#ffffff;">
+                      XANE<span style="color:#dce7ff;">.</span>
+                    </div>
                   </td>
                 </tr>
+
+                <!-- Email content -->
                 <tr>
                   <td style="padding:32px;">
+
                     <div style="display:inline-block;background:#e9efff;color:#244fd6;border-radius:20px;padding:7px 12px;font-size:12px;font-weight:700;">
                       PREMIUM XANETAG
                     </div>
+
                     <h1 style="font-size:26px;line-height:1.3;margin:20px 0 16px;color:#10172a;">
                       ${safeTitle}
                     </h1>
+
                     <p style="font-size:15px;line-height:1.8;color:#374151;margin:0 0 22px;">
                       ${safeMessage}
                     </p>
+
+                    <!-- Reserved XaneTag -->
                     <div style="background:#f3f6ff;border:1px solid #dce5ff;border-radius:12px;padding:18px;margin:24px 0;">
                       <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;">
                         Your requested XaneTag
                       </div>
-                      <div style="font-size:26px;font-weight:800;color:#244fd6;margin-top:8px;">
+
+                      <div style="font-size:26px;font-weight:800;color:#244fd6;margin-top:8px;overflow-wrap:anywhere;">
                         @${safeTag}
                       </div>
                     </div>
+
                     <p style="font-size:15px;line-height:1.8;color:#374151;">
                       Your target is <strong>10 successful referrals within 14 days</strong>.
-                      Your referral link is ready to share.
+                      Share your personal referral link to help secure your Premium XaneTag.
                     </p>
-<div style="margin:28px 0;padding:20px;background:#f3f6ff;border:1px solid #dce5ff;border-radius:12px;">
-  <p style="font-size:14px;font-weight:700;color:#10172a;margin:0 0 12px;">
-    Your personal referral link
-  </p>
 
-  <div style="background:#ffffff;border:1px solid #dce5ff;border-radius:8px;padding:14px;word-break:break-all;font-size:14px;line-height:1.7;">
-    <a href="${safeLink}" style="color:#315cf5;text-decoration:none;">
-      ${safeLink}
-    </a>
-  </div>
+                    <!-- Share referral link -->
+                    <div style="margin:28px 0;padding:20px;background:#f3f6ff;border:1px solid #dce5ff;border-radius:12px;">
 
-  <p style="font-size:13px;line-height:1.7;color:#64748b;margin:12px 0 0;">
-    Copy the link above and share it with your friends. When they join through your link, their registrations can count toward your referrals.
-  </p>
-</div>
+                      <p style="font-size:14px;font-weight:700;color:#10172a;margin:0 0 12px;">
+                        Share your referral link
+                      </p>
+
+                      <p style="font-size:13px;line-height:1.8;color:#64748b;margin:0 0 16px;">
+                        Choose where you want to share your link.
+                      </p>
+
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                        <tr>
+                          <td align="center" bgcolor="#245cff" style="background:#245cff;border-radius:10px;">
+                            <a href="${safeWhatsapp}" target="_blank" style="display:block;padding:15px 12px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;">
+                              Share on WhatsApp
+                            </a>
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td height="10" style="font-size:0;line-height:0;">&nbsp;</td>
+                        </tr>
+
+                        <tr>
+                          <td align="center" style="background:#ffffff;border:2px solid #245cff;border-radius:10px;">
+                            <a href="${safeTelegram}" target="_blank" style="display:block;padding:13px 12px;font-size:14px;font-weight:700;color:#245cff;text-decoration:none;border-radius:10px;">
+                              Share on Telegram
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <p style="font-size:12px;line-height:1.8;color:#64748b;margin:18px 0 8px;">
+                        Your personal referral URL:
+                      </p>
+
+                      <div style="background:#ffffff;border:1px solid #dce5ff;border-radius:8px;padding:13px;font-size:13px;line-height:1.8;overflow-wrap:anywhere;word-break:break-word;">
+                        <a href="${safeLink}" style="color:#245cff;text-decoration:none;">
+                          ${safeLink}
+                        </a>
+                      </div>
+
+                      <p style="font-size:12px;line-height:1.7;color:#64748b;margin:10px 0 0;">
+                        You can select and copy this link to share it anywhere.
+                      </p>
+                    </div>
 
                     <p style="font-size:14px;line-height:1.8;color:#374151;margin-top:28px;">
                       Keep sharing. Your referrals bring you closer to becoming a Xane Advocate.
                     </p>
+
                     <p style="font-size:14px;line-height:1.8;color:#374151;">
                       Team Xane
                     </p>
+
                   </td>
                 </tr>
+
+                <!-- Footer -->
                 <tr>
                   <td style="background:#f8fafc;padding:20px 32px;font-size:12px;line-height:1.7;color:#94a3b8;">
                     You're receiving this email because you requested a Premium XaneTag on Xane.
+                    <br><br>
+                    <a href="${escapeHtml(FRONTEND_URL)}" style="color:#245cff;text-decoration:none;">
+                      Visit Xane
+                    </a>
                   </td>
                 </tr>
+
               </table>
             </td>
           </tr>
@@ -107,6 +207,9 @@ function premiumEmailTemplate({ tag, title, message, buttonText, referralLink })
   `;
 }
 
+/**
+ * Premium XaneTag reservation email.
+ */
 async function sendPremiumReservationEmail({ userId }) {
   const { rows } = await pool.query(
     `SELECT * FROM waitlist_users WHERE id = $1`,
@@ -133,14 +236,16 @@ async function sendPremiumReservationEmail({ userId }) {
       tag: user.premium_xane_tag_requested,
       title: 'Your Premium XaneTag journey starts now.',
       message:
-        `Your requested name is temporarily reserved for you. ` +
-        `Refer 10 people within 14 days to become a Xane Advocate and secure your Premium XaneTag.`,
-      buttonText: 'Complete Your Referrals',
+        'Your requested name is temporarily reserved for you. ' +
+        'Refer 10 people within 14 days to become a Xane Advocate and secure your Premium XaneTag.',
       referralLink,
     }),
   });
 }
 
+/**
+ * Premium XaneTag day-seven reminder.
+ */
 async function sendPremiumDay7Reminder({ userId }) {
   const { rows } = await pool.query(
     `SELECT * FROM waitlist_users WHERE id = $1`,
@@ -161,7 +266,10 @@ async function sendPremiumDay7Reminder({ userId }) {
   }
 
   const referralLink = getReferralLink(user);
-  const referralsNeeded = Math.max(0, 10 - Number(user.referral_count || 0));
+  const referralsNeeded = Math.max(
+    0,
+    10 - Number(user.referral_count || 0)
+  );
 
   await sendEmail({
     toEmail: user.email,
@@ -170,15 +278,17 @@ async function sendPremiumDay7Reminder({ userId }) {
       tag: user.premium_xane_tag_requested,
       title: 'Your Premium XaneTag is still waiting for you.',
       message:
-        `Your name is reserved, but you haven't secured it yet.\n\n` +
-        `Refer 10 people to secure your Premium XaneTag, become a Xane Advocate and keep your early waitlist benefits.\n\n` +
+        "Your name is reserved, but you haven't secured it yet.\n\n" +
+        'Refer 10 people to secure your Premium XaneTag, become a Xane Advocate and keep your early waitlist benefits.\n\n' +
         `${referralsNeeded} more successful referral${referralsNeeded === 1 ? '' : 's'} needed. There are 7 days left in your challenge.`,
-      buttonText: 'Complete Your Referrals',
       referralLink,
     }),
   });
 }
 
+/**
+ * Premium XaneTag expiry email.
+ */
 async function sendPremiumExpiryEmail({ userId, tag }) {
   const { rows } = await pool.query(
     `SELECT *
@@ -196,8 +306,6 @@ async function sendPremiumExpiryEmail({ userId, tag }) {
     return false;
   }
 
-  const referralLink = getReferralLink(user);
-
   await sendEmail({
     toEmail: user.email,
     subject: `Your reservation for @${tag} has expired`,
@@ -205,10 +313,9 @@ async function sendPremiumExpiryEmail({ userId, tag }) {
       tag,
       title: 'Your 14-day reservation has ended.',
       message:
-        `Your 14 days are up, and you did not meet the 10-referral target.\n\n` +
+        'Your 14 days are up, and you did not meet the 10-referral target.\n\n' +
         `Your reservation for @${tag} has expired. This name may no longer be available.\n\n` +
-        `You can claim an available XaneTag at public launch, subject to availability. Stay connected for what's next.`,
-      buttonText: 'Visit Xane',
+        'You can claim an available XaneTag at public launch, subject to availability.',
       referralLink: FRONTEND_URL,
     }),
   });
@@ -236,11 +343,15 @@ async function sendLevelUpEmail({ userId, level }) {
 
   const user = rows[0];
 
-  if (!user) return;
+  if (!user) {
+    return;
+  }
 
   const template = TEMPLATES[level];
 
-  if (!template) return;
+  if (!template) {
+    return;
+  }
 
   const activeTag =
     user.is_premium_tag_active && user.premium_xane_tag
@@ -254,10 +365,7 @@ async function sendLevelUpEmail({ userId, level }) {
   });
 
   const referralLink = getReferralLink(user);
-
-  const finalHtml = html
-    .replaceAll('{{referralLink}}', referralLink)
-    .replaceAll('{{leaderboardLink}}', `${FRONTEND_URL}/leaderboard`);
+  const finalHtml = injectReferralLinks(html, referralLink);
 
   const existing = await pool.query(
     `SELECT 1
@@ -267,7 +375,9 @@ async function sendLevelUpEmail({ userId, level }) {
     [userId, level]
   );
 
-  if (existing.rowCount > 0) return;
+  if (existing.rowCount > 0) {
+    return;
+  }
 
   await sendEmail({
     toEmail: user.email,
@@ -283,7 +393,10 @@ async function sendLevelUpEmail({ userId, level }) {
       [userId, level]
     );
   } catch (err) {
-    console.error('Failed to record level-up email:', err.message);
+    console.error(
+      'Failed to record level-up email:',
+      err.message
+    );
   }
 }
 
