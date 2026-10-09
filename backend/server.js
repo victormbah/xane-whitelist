@@ -2,7 +2,9 @@ require('dotenv').config();
 
 const axios = require('axios');
 const app = require('./app');
-
+const {
+  startPremiumTagChallengeScheduler,
+} = require('./services/premiumTagChallengeService');
 const PORT = process.env.PORT || 4000;
 
 async function registerTelegramWebhook() {
@@ -43,4 +45,5 @@ async function registerTelegramWebhook() {
 app.listen(PORT, async () => {
   console.log(`Xane waitlist backend listening on port ${PORT}`);
   await registerTelegramWebhook();
+  await startPremiumTagChallengeScheduler();
 });

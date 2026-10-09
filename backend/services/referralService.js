@@ -96,24 +96,29 @@ if (rows.length === 0) {
 
     let premiumTagActivated = null;
     if (
-      newLevelInfo.key === 'advocate' &&
-      previousLevel !== 'advocate' &&
-      referrer.premium_xane_tag_requested &&
-      referrer.premium_xane_tag_deadline &&
-      new Date(referrer.premium_xane_tag_deadline) >= new Date()
-    ) {
+  newLevelInfo.key === 'advocate' &&
+  previousLevel !== 'advocate' &&
+  referrer.premium_xane_tag_requested &&
+  referrer.premium_xane_tag_deadline &&
+  new Date(referrer.premium_xane_tag_deadline) >= new Date() &&
+  !referrer.premium_tag_expired_at
+) {
       premiumTagActivated = referrer.premium_xane_tag_requested;
     }
 
     await client.query(
-      `UPDATE waitlist_users
-       SET position = $1,
-           level = $2,
-           premium_xane_tag = COALESCE($3, premium_xane_tag),
-           is_premium_tag_active = is_premium_tag_active OR $3 IS NOT NULL
-       WHERE id = $4`,
-      [newPosition, newLevelInfo.key, premiumTagActivated, referrerId]
-    );
+  `UPDATE waitlist_users
+   SET position = $1,
+       level = $2,
+       premium_xane_tag = COALESCE($3, premium_xane_tag),
+       is_premium_tag_active = is_premium_tag_active OR $3 IS NOT NULL,
+       premium_tag_activated_at = CASE
+         WHEN $3 IS NOT NULL THEN NOW()
+         ELSE premium_tag_activated_at
+       END
+   WHERE id = $4`,
+  [newPosition, newLevelInfo.key, premiumTagActivated, referrerId]
+);
 
     await client.query('COMMIT');
 

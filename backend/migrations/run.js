@@ -7,6 +7,7 @@ async function run() {
   const migrations = [
     '001_init.sql',
     '002_email_otp.sql',
+    '003_premium_tag_challenge.sql',
   ];
 
   try {
