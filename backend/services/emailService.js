@@ -331,7 +331,38 @@ async function sendPremiumExpiryEmail({ userId, tag }) {
 
   return true;
 }
+async function sendWelcomeEmail({ userId }) {
+  const { rows } = await pool.query(
+    'SELECT * FROM waitlist_users WHERE id = $1',
+    [userId]
+  );
 
+  const user = rows[0];
+
+  if (!user || !user.email) return;
+
+  const template = TEMPLATES.waitlist_member;
+  if (!template) {
+    throw new Error('Missing waitlist_member email template');
+  }
+
+  const tag =
+    user.is_premium_tag_active && user.premium_xane_tag
+      ? user.premium_xane_tag
+      : user.xane_tag || user.premium_xane_tag_requested || 'Xane member';
+
+  const { subject, html } = template({
+    tag,
+    position: user.position,
+    nextGoal: NEXT_GOAL_COPY.waitlist_member,
+  });
+
+  await sendEmail({
+    toEmail: user.email,
+    subject,
+    html: injectReferralLinks(html, getReferralLink(user)),
+  });
+}
 /**
  * Existing milestone email functionality.
  */
@@ -401,6 +432,7 @@ async function sendLevelUpEmail({ userId, level }) {
 }
 
 module.exports = {
+  sendWelcomeEmail,
   sendLevelUpEmail,
   sendPremiumReservationEmail,
   sendPremiumDay7Reminder,
