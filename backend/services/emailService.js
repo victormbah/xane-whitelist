@@ -284,6 +284,8 @@ async function sendPremiumDay7Reminder({ userId }) {
       referralLink,
     }),
   });
+
+    return true;
 }
 
 /**
