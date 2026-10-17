@@ -353,16 +353,39 @@ async function sendWelcomeEmail({ userId }) {
       ? user.premium_xane_tag
       : user.xane_tag || user.premium_xane_tag_requested || 'Xane member';
 
+  const isPremiumReservation =
+    Boolean(user.premium_xane_tag_requested) &&
+    !user.is_premium_tag_active &&
+    !user.premium_tag_expired_at;
+
   const { subject, html } = template({
     tag,
     position: user.position,
     nextGoal: NEXT_GOAL_COPY.waitlist_member,
   });
 
+  const premiumReservationHtml = isPremiumReservation
+    ? `
+        <div style="margin-top:24px;padding:20px;border-radius:12px;background:#171717;color:#ffffff;">
+          <h2 style="margin-top:0;">Your Premium XaneTag is reserved!</h2>
+          <p>Your requested tag is <strong>@${user.premium_xane_tag_requested}</strong>.</p>
+          <p>Refer 10 people within 14 days to become a Xane Advocate and secure your Premium XaneTag.</p>
+          <p>Share your personal referral link below to get started.</p>
+        </div>
+      `
+    : '';
+
+  const finalHtml = html.replace(
+    /(<\/body>)/i,
+    `${premiumReservationHtml}$1`
+  );
+
   await sendEmail({
     toEmail: user.email,
-    subject,
-    html: injectReferralLinks(html, getReferralLink(user)),
+    subject: isPremiumReservation
+      ? `Welcome to Xane — your Premium XaneTag @${user.premium_xane_tag_requested} is reserved`
+      : subject,
+    html: injectReferralLinks(finalHtml, getReferralLink(user)),
   });
 }
 /**

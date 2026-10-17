@@ -2,10 +2,7 @@ const { pool } = require('../config/db');
 const otpService = require('../services/otpService');
 const referralService = require('../services/referralService');
 const { deepLinkForUser } = require('../config/telegram');
-const {
-  sendWelcomeEmail,
-  sendPremiumReservationEmail,
-} = require('../services/emailService');
+const { sendWelcomeEmail } = require('../services/emailService');
 
 const {
   normalizeTag,
@@ -521,16 +518,6 @@ async function joinWaitlist(req, res, next) {
 sendWelcomeEmail({ userId: user.id }).catch((err) => {
   console.error('Failed to send waitlist welcome email:', err.message);
 });
-
-// Keep the existing Premium reservation email.
-if (user.premium_xane_tag_requested) {
-  sendPremiumReservationEmail({ userId: user.id }).catch((err) => {
-    console.error(
-      'Failed to send Premium XaneTag reservation email:',
-      err.message
-    );
-  });
-}
 
     return res.status(201).json({
       userId: user.id,
