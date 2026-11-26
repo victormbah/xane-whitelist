@@ -5,6 +5,7 @@ const {
   NEXT_GOAL_COPY,
   buildShareLinks,
 } = require('./emailTemplates');
+const { heldTag } = require('./tagService');
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL || 'https://www.xane.app';
@@ -55,11 +56,19 @@ function injectReferralLinks(html, referralLink) {
  * Uses the same light-blue branding as the waitlist emails.
  * No slogan is displayed in the header.
  */
+const CHALLENGE_NOTE =
+  'Your target is <strong>10 successful referrals within 14 days</strong>. ' +
+  'Share your personal referral link to help secure your Premium XaneTag.';
+
 function premiumEmailTemplate({
   tag,
   title,
   message,
   referralLink,
+  tagLabel = 'Your requested XaneTag',
+  // Trusted HTML written in this file, never user input.
+  noteHtml = CHALLENGE_NOTE,
+  closingLine = 'Keep sharing. Your referrals bring you closer to becoming a Xane Advocate.',
 }) {
   const safeTag = escapeHtml(tag);
   const safeTitle = escapeHtml(title);
@@ -115,7 +124,7 @@ function premiumEmailTemplate({
                     <!-- Reserved XaneTag -->
                     <div style="background:#f3f6ff;border:1px solid #dce5ff;border-radius:12px;padding:18px;margin:24px 0;">
                       <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;">
-                        Your requested XaneTag
+                        ${escapeHtml(tagLabel)}
                       </div>
 
                       <div style="font-size:26px;font-weight:800;color:#244fd6;margin-top:8px;overflow-wrap:anywhere;">
@@ -124,8 +133,7 @@ function premiumEmailTemplate({
                     </div>
 
                     <p style="font-size:15px;line-height:1.8;color:#374151;">
-                      Your target is <strong>10 successful referrals within 14 days</strong>.
-                      Share your personal referral link to help secure your Premium XaneTag.
+                      ${noteHtml}
                     </p>
 
                     <!-- Share referral link -->
@@ -177,7 +185,7 @@ function premiumEmailTemplate({
                     </div>
 
                     <p style="font-size:14px;line-height:1.8;color:#374151;margin-top:28px;">
-                      Keep sharing. Your referrals bring you closer to becoming a Xane Advocate.
+                      ${escapeHtml(closingLine)}
                     </p>
 
                     <p style="font-size:14px;line-height:1.8;color:#374151;">
@@ -291,7 +299,33 @@ async function sendPremiumDay7Reminder({ userId }) {
 /**
  * Premium XaneTag expiry email.
  */
-async function sendPremiumExpiryEmail({ userId, tag }) {
+function buildPremiumExpiryEmail(user) {
+  const tag = user.premium_xane_tag_expired || user.premium_xane_tag_requested;
+  const count = Number(user.referral_count || 0);
+
+  return {
+    subject: `Your reservation for @${tag} has expired`,
+    html: premiumEmailTemplate({
+      tag,
+      tagLabel: 'Your reservation has ended for',
+      title: 'Your 14-day reservation has ended.',
+      message:
+        'Your 14 days are up, and you did not reach 10 successful referrals in time, ' +
+        `so your reservation for @${tag} has expired and the name has been released.\n\n` +
+        'You are still a member of the Xane waitlist. Your email stays registered, and your ' +
+        `${count} referral${count === 1 ? '' : 's'}, your level and your place in line are all kept.\n\n` +
+        'At public launch you can claim any available XaneTag, including ' +
+        `@${tag} if no one else has claimed it by then.`,
+      noteHtml:
+        'Your personal referral link still works. Every successful referral keeps moving you ' +
+        'up the waitlist and toward your next level.',
+      closingLine: 'Keep sharing to climb the waitlist before launch.',
+      referralLink: getReferralLink(user),
+    }),
+  };
+}
+
+async function sendPremiumExpiryEmail({ userId }) {
   const { rows } = await pool.query(
     `SELECT *
      FROM waitlist_users
@@ -304,23 +338,13 @@ async function sendPremiumExpiryEmail({ userId, tag }) {
 
   const user = rows[0];
 
-  if (!user || !tag) {
+  if (!user || !(user.premium_xane_tag_expired || user.premium_xane_tag_requested)) {
     return false;
   }
 
-  await sendEmail({
-    toEmail: user.email,
-    subject: `Your reservation for @${tag} has expired`,
-    html: premiumEmailTemplate({
-      tag,
-      title: 'Your 14-day reservation has ended.',
-      message:
-        'Your 14 days are up, and you did not meet the 10-referral target.\n\n' +
-        `Your reservation for @${tag} has expired. This name may no longer be available.\n\n` +
-        'You can claim an available XaneTag at public launch, subject to availability.',
-      referralLink: FRONTEND_URL,
-    }),
-  });
+  const { subject, html } = buildPremiumExpiryEmail(user);
+
+  await sendEmail({ toEmail: user.email, subject, html });
 
   await pool.query(
     `UPDATE waitlist_users
@@ -409,10 +433,8 @@ async function sendLevelUpEmail({ userId, level }) {
     return;
   }
 
-  const activeTag =
-    user.is_premium_tag_active && user.premium_xane_tag
-      ? user.premium_xane_tag
-      : user.xane_tag || user.premium_xane_tag_requested;
+  // A member whose reservation expired holds no tag until launch.
+  const activeTag = heldTag(user);
 
   const { subject, html } = template({
     tag: activeTag,
@@ -462,4 +484,6 @@ module.exports = {
   sendPremiumReservationEmail,
   sendPremiumDay7Reminder,
   sendPremiumExpiryEmail,
+  buildPremiumExpiryEmail,
+  getReferralLink,
 };

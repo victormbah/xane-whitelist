@@ -3,6 +3,16 @@ const otpService = require('../services/otpService');
 const referralService = require('../services/referralService');
 const { deepLinkForUser } = require('../config/telegram');
 const { sendWelcomeEmail } = require('../services/emailService');
+const {
+  TAG_HELD_SQL,
+  HELD_TAG_SQL,
+  isTagTaken,
+  lockTag,
+  uniqueReferralCode,
+  heldTag,
+  premiumSummary,
+  referralLink: buildReferralLink,
+} = require('../services/tagService');
 
 const {
   normalizeTag,
@@ -10,6 +20,28 @@ const {
   getTagValidationError,
   suggestAlternatives,
 } = require('../utils/xanetag');
+
+const ALREADY_REGISTERED = {
+  error:
+    'This email is already on the waitlist. Sign in with a code sent to your email to open your dashboard.',
+  code: 'ALREADY_REGISTERED',
+};
+
+/** What the dashboard needs about a member, shared by /me and sign-in. */
+function memberView(user) {
+  return {
+    userId: user.id,
+    xaneTag: heldTag(user),
+    premium: premiumSummary(user),
+    position: user.position,
+    level: user.level,
+    referralCount: user.referral_count,
+    referralLink: buildReferralLink(user),
+    status: user.status,
+    telegramConnected: user.telegram_verified,
+    telegramDeepLink: deepLinkForUser(user.id),
+  };
+}
 
 // ---- Username availability -------------------------------------------------
 
@@ -46,17 +78,9 @@ async function checkUsername(req, res, next) {
       });
     }
 
-    const { rows } = await pool.query(
-      `SELECT 1
-       FROM waitlist_users
-       WHERE LOWER(xane_tag) = $1
-          OR LOWER(premium_xane_tag_requested) = $1
-          OR LOWER(premium_xane_tag) = $1
-       LIMIT 1`,
-      [tag]
-    );
-
-    if (rows.length > 0) {
+    // Free tags, secured Premium tags and running reservations. An expired
+    // reservation holds nothing, so its name is offered again here.
+    if (await isTagTaken(pool, tag)) {
       return res.json({
         available: false,
         reason: 'Not available',
@@ -99,9 +123,10 @@ async function verifyOtp(req, res, next) {
   try {
     const { identifier, purpose, code } = req.body;
 
-    if (!identifier || !purpose || !code) {
+    // Sign-in codes are only redeemed through /login/verify, which returns the session.
+    if (!identifier || !['phone', 'email'].includes(purpose) || !code) {
       return res.status(400).json({
-        error: 'identifier, purpose and code are required',
+        error: 'identifier, a valid purpose and code are required',
       });
     }
 
@@ -129,17 +154,13 @@ async function getReferralPreview(req, res, next) {
       });
     }
 
+    // A member whose reservation expired holds no tag, so their first name is
+    // shown instead: never a released name someone else may now own.
     const { rows } = await pool.query(
-      `SELECT
-         CASE
-           WHEN is_premium_tag_active AND premium_xane_tag IS NOT NULL
-             THEN premium_xane_tag
-           WHEN xane_tag IS NOT NULL
-             THEN xane_tag
-           ELSE premium_xane_tag_requested
-         END AS referrer_tag
+      `SELECT ${HELD_TAG_SQL} AS referrer_tag,
+              split_part(TRIM(full_name), ' ', 1) AS referrer_name
        FROM waitlist_users
-       WHERE referral_code = $1
+       WHERE LOWER(referral_code) = $1
        LIMIT 1`,
       [referralCode]
     );
@@ -152,6 +173,7 @@ async function getReferralPreview(req, res, next) {
 
     return res.json({
       referrerTag: rows[0].referrer_tag,
+      referrerName: rows[0].referrer_name || null,
     });
   } catch (err) {
     next(err);
@@ -247,10 +269,10 @@ async function joinWaitlist(req, res, next) {
       [normalizedEmail]
     );
 
+    // A registered email can never start a new membership (or a new 14-day
+    // reservation). The member signs in with an email code instead.
     if (duplicateAccount.rows.length > 0) {
-      return res.status(409).json({
-        error: 'Email already registered',
-      });
+      return res.status(409).json(ALREADY_REGISTERED);
     }
 
     // -----------------------------------------------------------------------
@@ -302,22 +324,6 @@ async function joinWaitlist(req, res, next) {
         });
       }
 
-      // Check ALL tag types, including pending premium reservations.
-      const freeTagTaken = await pool.query(
-        `SELECT 1
-         FROM waitlist_users
-         WHERE LOWER(xane_tag) = $1
-            OR LOWER(premium_xane_tag_requested) = $1
-            OR LOWER(premium_xane_tag) = $1
-         LIMIT 1`,
-        [tag]
-      );
-
-      if (freeTagTaken.rows.length > 0) {
-        return res.status(409).json({
-          error: 'XaneTag already registered',
-        });
-      }
     }
 
     // -----------------------------------------------------------------------
@@ -343,23 +349,6 @@ async function joinWaitlist(req, res, next) {
       if (isReserved(premiumTag)) {
         return res.status(400).json({
           error: 'This premium XaneTag is reserved',
-        });
-      }
-
-      // Check pending + active premium tags AND free tags.
-      const premiumTagTaken = await pool.query(
-        `SELECT 1
-         FROM waitlist_users
-         WHERE LOWER(xane_tag) = $1
-            OR LOWER(premium_xane_tag_requested) = $1
-            OR LOWER(premium_xane_tag) = $1
-         LIMIT 1`,
-        [premiumTag]
-      );
-
-      if (premiumTagTaken.rows.length > 0) {
-        return res.status(409).json({
-          error: 'Premium XaneTag already registered',
         });
       }
 
@@ -398,132 +387,102 @@ async function joinWaitlist(req, res, next) {
     }
 
     // -----------------------------------------------------------------------
-    // REFERRAL
+    // CLAIM THE TAG AND CREATE THE MEMBER, IN ONE TRANSACTION
+    //
+    // The tag is locked first, so the availability check and the insert can't
+    // interleave with another sign-up claiming the same name in any column
+    // (free tag, Premium reservation, secured Premium). The UNIQUE constraints
+    // remain the last line of defence; a 23505 below still answers 409.
     // -----------------------------------------------------------------------
 
-    let referredBy = null;
+    const claimedTag = tag || premiumTag;
+    const client = await pool.connect();
+    let user;
 
-    if (referralCode) {
-      const normalizedReferralCode =
-        normalizeTag(referralCode);
+    try {
+      await client.query('BEGIN');
+      await lockTag(client, claimedTag);
 
-      const { rows } = await pool.query(
-        `SELECT id
-         FROM waitlist_users
-         WHERE referral_code = $1
-            OR LOWER(xane_tag) = $1
-            OR LOWER(premium_xane_tag_requested) = $1
-            OR LOWER(premium_xane_tag) = $1
-         LIMIT 1`,
-        [normalizedReferralCode]
+      if (await isTagTaken(client, claimedTag)) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: premiumTag
+            ? 'Premium XaneTag already registered'
+            : 'XaneTag already registered',
+        });
+      }
+
+      // Referrer: an exact referral code wins (links already shared keep
+      // crediting the person who shared them); otherwise a tag someone holds.
+      let referredBy = null;
+
+      if (referralCode) {
+        const normalizedReferralCode = normalizeTag(referralCode);
+
+        const { rows } = await client.query(
+          `SELECT id
+           FROM waitlist_users
+           WHERE LOWER(referral_code) = $1
+              OR ${TAG_HELD_SQL}
+           ORDER BY (LOWER(referral_code) = $1) DESC
+           LIMIT 1`,
+          [normalizedReferralCode]
+        );
+
+        if (rows[0]) {
+          referredBy = rows[0].id;
+        }
+      }
+
+      // The tag itself, unless an earlier member still uses that name as their
+      // referral code (their reservation of it expired): then tag + suffix.
+      const userReferralCode = await uniqueReferralCode(client, claimedTag);
+
+      // PHONE TEMPORARILY DISABLED: phone is not inserted. phone_verified stays
+      // TRUE so the existing Telegram activation flow keeps working.
+      const insertResult = await client.query(
+        `INSERT INTO waitlist_users
+         (
+           full_name,
+           phone_verified,
+           email,
+           email_verified,
+           xane_tag,
+           referral_code,
+           premium_xane_tag_requested,
+           premium_xane_tag_deadline,
+           referred_by
+         )
+         VALUES ($1, TRUE, $2, TRUE, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [
+          fullName.trim(),
+          normalizedEmail,
+          tag,
+          userReferralCode,
+          premiumTag,
+          premiumDeadline,
+          referredBy,
+        ]
       );
 
-      if (rows[0]) {
-        referredBy = rows[0].id;
-      }
+      await client.query('COMMIT');
+      user = insertResult.rows[0];
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
 
-    // -----------------------------------------------------------------------
-    // REFERRAL CODE
-    // -----------------------------------------------------------------------
-
-    /*
-     * Free user:
-     *   referral_code = free XaneTag
-     *
-     * Premium user:
-     *   referral_code = premium XaneTag
-     *
-     * This allows both types of users to have working referral links.
-     */
-
-    const userReferralCode = tag || premiumTag;
-
-    // -----------------------------------------------------------------------
-    // CREATE WAITLIST USER
-    // -----------------------------------------------------------------------
-
-    /*
-     * PHONE TEMPORARILY DISABLED
-     *
-     * Old insert fields:
-     *
-     * phone,
-     * phone_verified,
-     *
-     * Old values:
-     *
-     * normalizedPhone,
-     * TRUE,
-     *
-     * These are intentionally commented out for now.
-     *
-     * We keep phone_verified = TRUE temporarily below so the existing
-     * Telegram activation flow can continue working while phone is removed
-     * from the signup UX.
-     */
-
-    const insertResult = await pool.query(
-      `INSERT INTO waitlist_users
-       (
-         full_name,
-
-         -- PHONE TEMPORARILY DISABLED:
-         -- phone,
-
-         phone_verified,
-         email,
-         email_verified,
-         xane_tag,
-         referral_code,
-         premium_xane_tag_requested,
-         premium_xane_tag_deadline,
-         referred_by
-       )
-       VALUES
-       (
-         $1,
-
-         -- PHONE TEMPORARILY DISABLED:
-         -- $2,
-
-         TRUE,
-         $2,
-         TRUE,
-         $3,
-         $4,
-         $5,
-         $6,
-         $7
-       )
-       RETURNING *`,
-      [
-        fullName.trim(),
-
-        // PHONE TEMPORARILY DISABLED:
-        // normalizedPhone,
-
-        normalizedEmail,
-        tag,
-        userReferralCode,
-        premiumTag,
-        premiumDeadline,
-        referredBy,
-      ]
-    );
-
-    const user = insertResult.rows[0];
-
-// Send the welcome email with the user's personal referral link.
-sendWelcomeEmail({ userId: user.id }).catch((err) => {
-  console.error('Failed to send waitlist welcome email:', err.message);
-});
+    // Send the welcome email with the user's personal referral link.
+    sendWelcomeEmail({ userId: user.id }).catch((err) => {
+      console.error('Failed to send waitlist welcome email:', err.message);
+    });
 
     return res.status(201).json({
       userId: user.id,
-      xaneTag:
-        user.xane_tag ||
-        user.premium_xane_tag_requested,
+      xaneTag: heldTag(user),
       telegramDeepLink: deepLinkForUser(user.id),
     });
   } catch (err) {
@@ -590,27 +549,8 @@ async function getMe(req, res, next) {
       });
     }
 
-    const activeTag =
-      user.is_premium_tag_active &&
-      user.premium_xane_tag
-        ? user.premium_xane_tag
-        : user.xane_tag ||
-          user.premium_xane_tag_requested;
-
-    const referralLink = user.referral_code
-      ? `${process.env.FRONTEND_URL}/waitlist?ref=${encodeURIComponent(
-          user.referral_code
-        )}`
-      : `${process.env.FRONTEND_URL}/waitlist`;
-
-    res.json({
-      xaneTag: activeTag,
-      position: user.position,
-      level: user.level,
-      referralCount: user.referral_count,
-      referralLink,
-      status: user.status,
-    });
+    // xaneTag is null after an expired reservation; premium.status says why.
+    res.json(memberView(user));
   } catch (err) {
     next(err);
   }
@@ -649,11 +589,7 @@ async function getClimb(req, res, next) {
 
     const upcoming = nextLevel(currentLevelInfo.key);
 
-    const referralLink = user.referral_code
-      ? `${process.env.FRONTEND_URL}/waitlist?ref=${encodeURIComponent(
-          user.referral_code
-        )}`
-      : `${process.env.FRONTEND_URL}/waitlist`;
+    const referralLink = buildReferralLink(user);
 
     res.json({
       position: user.position,
@@ -679,6 +615,66 @@ async function getClimb(req, res, next) {
   }
 }
 
+// ---- Sign in (existing members) --------------------------------------------
+//
+// An existing member, including one whose Premium reservation expired, gets
+// back to their dashboard with a one-time code sent to their registered email.
+// The answer to /login/request is the same whether or not the email is on the
+// waitlist. Each code works once (otpService marks it verified) and allows 5
+// wrong tries.
+
+function normalizeEmail(raw) {
+  return String(raw || '').trim().toLowerCase();
+}
+
+async function requestLogin(req, res, next) {
+  try {
+    const email = normalizeEmail(req.body?.email);
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+
+    const result = await otpService.requestOtp({
+      identifier: email,
+      purpose: 'login',
+    });
+
+    res.json({
+      ...result,
+      message: "If this email is on the waitlist, we've sent it a sign-in code.",
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function verifyLogin(req, res, next) {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const code = String(req.body?.code || '').trim();
+
+    if (!email || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: 'Email and the 6-digit code are required' });
+    }
+
+    await otpService.verifyOtp({ identifier: email, purpose: 'login', code });
+
+    const { rows } = await pool.query(
+      `SELECT * FROM waitlist_users WHERE LOWER(TRIM(email)) = $1 LIMIT 1`,
+      [email]
+    );
+
+    if (!rows[0]) {
+      return res.status(400).json({ error: 'Incorrect or expired code' });
+    }
+
+    res.json(memberView(rows[0]));
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ---- Exports ----------------------------------------------------------------
 
 module.exports = {
@@ -690,4 +686,6 @@ module.exports = {
   telegramStatus,
   getMe,
   getClimb,
+  requestLogin,
+  verifyLogin,
 };

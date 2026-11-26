@@ -13,7 +13,18 @@ const otpLimiter = rateLimit({
   message: { error: 'Too many requests. Please try again later.' },
 });
 
+// Sign-in code guessing: each code allows 5 tries; this also caps tries per client.
+const loginVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please try again later.' },
+});
+
 router.get('/check-username', waitlistController.checkUsername);
+router.post('/login/request', otpLimiter, waitlistController.requestLogin);
+router.post('/login/verify', loginVerifyLimiter, waitlistController.verifyLogin);
 router.post('/otp/request', otpLimiter, waitlistController.requestOtp);
 router.post('/otp/verify', waitlistController.verifyOtp);
 router.post('/join', waitlistController.joinWaitlist);

@@ -141,9 +141,11 @@
     "xtend": "^4.0.2"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test --test-concurrency=1 test/",
     "start": "node server.js",
     "migrate": "node migrations/run.js",
+    "release-expired-tags": "node scripts/release-expired-premium-tags.js",
+    "export-wallet-tags": "node scripts/export-tags-for-wallet.js",
     "set-telegram-webhook": "node scripts/setTelegramWebhook.js"
   },
   "keywords": [],

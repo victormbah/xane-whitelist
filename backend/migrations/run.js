@@ -8,6 +8,7 @@ async function run() {
     '001_init.sql',
     '002_email_otp.sql',
     '003_premium_tag_challenge.sql',
+    '004_premium_tag_release.sql',
   ];
 
   try {

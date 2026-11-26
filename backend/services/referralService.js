@@ -1,9 +1,9 @@
 const { pool } = require('../config/db');
 const { levelForReferralCount } = require('./levelService');
 const { sendLevelUpEmail } = require('./emailService');
+const { PREMIUM_REFERRAL_TARGET, PREMIUM_WINDOW_DAYS } = require('./tagService');
 
 const POSITION_JUMP = parseInt(process.env.REFERRAL_POSITION_JUMP || '3', 10);
-const PREMIUM_TAG_WINDOW_DAYS = 14;
 
 /**
  * Computes a user's displayed waitlist position from their base (signup-order)
@@ -94,16 +94,27 @@ if (rows.length === 0) {
     const previousLevel = referrer.level;
     const newLevelInfo = levelForReferralCount(referrer.referral_count);
 
+    // Secure a Premium reservation the moment the 10th successful referral lands inside its
+    // 14-day window. Counted from referral_events (this one included) instead of from the level
+    // change, so it does not depend on the member crossing into 'advocate' with this referral.
+    // The row is locked by the UPDATE above, so the expiry job cannot interleave.
     let premiumTagActivated = null;
     if (
-  newLevelInfo.key === 'advocate' &&
-  previousLevel !== 'advocate' &&
-  referrer.premium_xane_tag_requested &&
-  referrer.premium_xane_tag_deadline &&
-  new Date(referrer.premium_xane_tag_deadline) >= new Date() &&
-  !referrer.premium_tag_expired_at
-) {
-      premiumTagActivated = referrer.premium_xane_tag_requested;
+      referrer.premium_xane_tag_requested &&
+      !referrer.is_premium_tag_active &&
+      !referrer.premium_xane_tag &&
+      !referrer.premium_tag_expired_at &&
+      referrer.premium_xane_tag_deadline &&
+      new Date(referrer.premium_xane_tag_deadline) >= new Date()
+    ) {
+      const { rows: windowRows } = await client.query(
+        `SELECT COUNT(*)::int AS n FROM referral_events
+         WHERE referrer_id = $1 AND created_at <= $2`,
+        [referrerId, referrer.premium_xane_tag_deadline]
+      );
+      if (windowRows[0].n >= PREMIUM_REFERRAL_TARGET) {
+        premiumTagActivated = referrer.premium_xane_tag_requested;
+      }
     }
 
     await client.query(
@@ -139,7 +150,7 @@ if (rows.length === 0) {
 }
 
 function premiumTagDeadline() {
-  return new Date(Date.now() + PREMIUM_TAG_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return new Date(Date.now() + PREMIUM_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 }
 
 module.exports = { computeDisplayPosition, assignBasePosition, registerReferral, premiumTagDeadline };

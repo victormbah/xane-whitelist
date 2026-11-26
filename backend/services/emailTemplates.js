@@ -103,7 +103,7 @@ function emailLayout({
   referralButton = true,
   footerNote = 'You are receiving this email because you joined the Xane waitlist.',
 }) {
-  const safeTag = escapeHtml(tag || 'your tag');
+  const safeTag = escapeHtml(tag || '');
   const safePosition = escapeHtml(formatPosition(position));
 
   return `<!DOCTYPE html>
@@ -176,7 +176,7 @@ function emailLayout({
                     </p>
 
                     <p style="margin:0;font-size:29px;line-height:1.3;font-weight:800;letter-spacing:-0.8px;color:#1749c8;overflow-wrap:anywhere;">
-                      @${safeTag}
+                      ${tag ? `@${safeTag}` : 'Claim yours at launch'}
                     </p>
 
                     <p style="margin:10px 0 0;font-size:12px;line-height:1.7;color:#56647c;">
@@ -242,11 +242,11 @@ function emailLayout({
 
 const TEMPLATES = {
   waitlist_member: ({ tag, position }) => ({
-    subject: `@${tag} is yours`,
+    subject: tag ? `@${tag} is yours` : `You're on the Xane waitlist`,
     html: emailLayout({
-      preheader: `Your XaneTag @${tag} is reserved. Here's your place on the waitlist.`,
+      preheader: tag ? `Your XaneTag @${tag} is reserved. Here's your place on the waitlist.` : `Here's your place on the waitlist.`,
       eyebrow: 'WELCOME TO XANE',
-      title: `@${tag} is yours.`,
+      title: tag ? `@${tag} is yours.` : `You're on the list.`,
       subtitle: 'You made it onto the list. Now let’s move you up.',
       tag,
       position,
@@ -312,7 +312,7 @@ const TEMPLATES = {
   }),
 
   advocate: ({ tag, position, nextGoal }) => ({
-    subject: `You're a Xane Advocate, @${tag}`,
+    subject: tag ? `You're a Xane Advocate, @${tag}` : `You're a Xane Advocate`,
     html: emailLayout({
       preheader: `You've reached Advocate status on Xane.`,
       eyebrow: 'MILESTONE UNLOCKED',

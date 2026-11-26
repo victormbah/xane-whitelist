@@ -69,7 +69,7 @@ async function isAlreadyRegistered(identifier, purpose) {
  *   Locally generated OTP + Resend email
  */
 async function requestOtp({ identifier, purpose }) {
-  if (!['phone', 'email'].includes(purpose)) {
+  if (!['phone', 'email', 'login'].includes(purpose)) {
     throw badRequest('Invalid OTP purpose');
   }
 
@@ -78,13 +78,31 @@ async function requestOtp({ identifier, purpose }) {
   }
 
   // ---------------------------------------------------------------------------
+  // SIGN-IN CODE FOR AN EXISTING MEMBER
+  //
+  // 'login' is the reverse of sign-up: the email must already be registered.
+  // An unknown email gets the same answer and no email, so this endpoint does
+  // not reveal who is on the waitlist.
+  // ---------------------------------------------------------------------------
+
+  if (purpose === 'login') {
+    identifier = String(identifier).trim().toLowerCase();
+
+    if (!(await isAlreadyRegistered(identifier, 'email'))) {
+      return {
+        expiresInSeconds: OTP_EXPIRY_MINUTES * 60,
+        resendAfterSeconds: RESEND_COOLDOWN_SECONDS,
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // DUPLICATE ACCOUNT CHECK
   // ---------------------------------------------------------------------------
 
-  const alreadyRegistered = await isAlreadyRegistered(
-    identifier,
-    purpose
-  );
+  const alreadyRegistered =
+    purpose !== 'login' &&
+    (await isAlreadyRegistered(identifier, purpose));
 
   if (alreadyRegistered) {
     throw badRequest(
@@ -201,6 +219,7 @@ async function requestOtp({ identifier, purpose }) {
       email: identifier,
       code,
       expirationMinutes: OTP_EXPIRY_MINUTES,
+      signIn: purpose === 'login',
     });
 
     await pool.query(

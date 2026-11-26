@@ -28,15 +28,16 @@ async function sendEmailOtp({
   email,
   code,
   expirationMinutes,
+  signIn = false,
 }) {
   return sendEmail({
     toEmail: email,
-    subject: 'Your Xane verification code',
+    subject: signIn ? 'Your Xane waitlist sign-in code' : 'Your Xane verification code',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto;">
-        <h2>Xane Email Verification</h2>
+        <h2>${signIn ? 'Sign in to your Xane waitlist dashboard' : 'Xane Email Verification'}</h2>
 
-        <p>Your Xane verification code is:</p>
+        <p>Your Xane ${signIn ? 'sign-in' : 'verification'} code is:</p>
 
         <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; margin: 24px 0;">
           ${code}

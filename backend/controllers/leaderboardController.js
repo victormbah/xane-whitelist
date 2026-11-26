@@ -1,4 +1,5 @@
 const { pool } = require('../config/db');
+const { HELD_TAG_SQL } = require('../services/tagService');
 
 const LEVEL_BADGE_LABEL = {
   waitlist_member: 'Waitlist Member',
@@ -23,13 +24,7 @@ async function getLeaderboard(req, res, next) {
 
     const { rows } = await pool.query(
       `SELECT
-         CASE
-  WHEN is_premium_tag_active AND premium_xane_tag IS NOT NULL
-    THEN premium_xane_tag
-  WHEN xane_tag IS NOT NULL
-    THEN xane_tag
-  ELSE premium_xane_tag_requested
-END AS tag,
+         ${HELD_TAG_SQL} AS tag,
          level,
          referral_count
        FROM waitlist_users
@@ -41,7 +36,8 @@ END AS tag,
 
     const leaderboard = rows.map((row, index) => ({
       rank: index + 1,
-      username: `@${row.tag}`,
+      // An expired reservation holds no tag: never show the released name.
+      username: row.tag ? `@${row.tag}` : 'Xane member',
       badge: LEVEL_BADGE_LABEL[row.level] || row.level,
       friends: row.referral_count,
     }));
