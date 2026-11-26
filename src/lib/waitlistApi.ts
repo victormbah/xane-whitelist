@@ -1,4 +1,6 @@
-export const API_BASE_URL = "https://xane-whitelist.onrender.com";
+// VITE_API_BASE_URL points a local build at a local backend; production keeps the default.
+export const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) || "https://xane-whitelist.onrender.com";
 
 export type OtpPurpose = "phone" | "email";
 export type XaneTagType = "free" | "premium";
@@ -6,7 +8,28 @@ export type XaneTagType = "free" | "premium";
 export interface ApiError {
   error?: string;
   reason?: string;
+  code?: string;
   suggestions?: string[];
+}
+
+/** An error from the API, carrying its machine-readable code (e.g. ALREADY_REGISTERED). */
+export class WaitlistApiError extends Error {
+  code?: string;
+  status: number;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** True when the API says this email is already on the waitlist (sign in instead). */
+export function isAlreadyRegistered(error: unknown): boolean {
+  return (
+    error instanceof WaitlistApiError &&
+    (error.code === "ALREADY_REGISTERED" || /already registered|already on the waitlist/i.test(error.message))
+  );
 }
 
 async function request<T>(
@@ -32,10 +55,12 @@ async function request<T>(
   if (!response.ok) {
     const body = (payload || {}) as ApiError;
 
-    throw new Error(
+    throw new WaitlistApiError(
       body.error ||
         body.reason ||
-        `Request failed (${response.status})`
+        `Request failed (${response.status})`,
+      response.status,
+      body.code
     );
   }
 
@@ -162,17 +187,52 @@ export async function getTelegramStatus(userId: string) {
   );
 }
 
+export interface PremiumStatus {
+  /** secured: earned with 10 referrals; reserved: 14-day window running; expired: window ended short. */
+  status: "secured" | "reserved" | "expired" | "none";
+  tag: string | null;
+  deadline: string | null;
+  expiredAt: string | null;
+  target: number;
+}
+
+export interface MemberView {
+  userId: string;
+  /** The tag the member holds now; null after an expired Premium reservation. */
+  xaneTag: string | null;
+  premium?: PremiumStatus;
+  position: number | null;
+  level: string;
+  referralCount: number;
+  referralLink: string;
+  status: string;
+  telegramConnected?: boolean;
+  telegramDeepLink?: string;
+}
+
 export async function getMe(userId: string) {
-  return request<{
-    xaneTag: string;
-    position: number | null;
-    level: string;
-    referralCount: number;
-    referralLink: string;
-    status: string;
-  }>(
+  return request<MemberView>(
     `/api/waitlist/me/${encodeURIComponent(userId)}`
   );
+}
+
+/** Sends a one-time sign-in code to a registered email (same answer for unknown emails). */
+export async function requestLoginCode(email: string) {
+  return request<{ message: string; resendAfterSeconds: number; expiresInSeconds: number }>(
+    "/api/waitlist/login/request",
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }
+  );
+}
+
+/** Redeems the sign-in code; returns the member's dashboard data. */
+export async function verifyLoginCode(email: string, code: string) {
+  return request<MemberView>("/api/waitlist/login/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
 }
 
 export async function getClimb(userId: string) {
@@ -203,8 +263,8 @@ export async function getClimb(userId: string) {
 
 export async function getReferralPreview(referralCode: string) {
   return request<{
-    referrerName?: string;
-    referrerTag?: string;
+    referrerName?: string | null;
+    referrerTag?: string | null;
   }>(
     `/api/waitlist/referral-preview?ref=${encodeURIComponent(
       referralCode

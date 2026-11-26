@@ -48,7 +48,26 @@ const WaitlistDashboard = ({ userData, onViewLeaderboard }: WaitlistDashboardPro
     return () => { cancelled = true; };
   }, [userData.userId]);
 
-  const displayTag = data?.xaneTag ? `@${data.xaneTag}.xane` : userData.freeTag;
+  // Once loaded, the server is the truth: an expired reservation holds no tag, even if this
+  // browser still remembers the one chosen at sign-up.
+  const displayTag = data
+    ? data.xaneTag
+      ? `@${data.xaneTag}.xane`
+      : ""
+    : userData.freeTag;
+  const premium = data?.premium;
+  const daysLeft = premium?.status === "reserved" && premium.deadline
+    ? Math.max(0, Math.ceil((new Date(premium.deadline).getTime() - Date.now()) / 86400000))
+    : null;
+  const tagNote = !data
+    ? ""
+    : premium?.status === "secured"
+    ? "Your Premium XaneTag is secured. It's yours when you create your Xane account."
+    : premium?.status === "reserved"
+    ? `Reserved for you: reach ${premium.target} referrals in ${daysLeft} day${daysLeft === 1 ? "" : "s"} to secure it.`
+    : premium?.status === "expired" && !data.xaneTag
+    ? `Your reservation for @${premium.tag} ended. You keep your place, referrals and level, and can claim any available XaneTag at launch.`
+    : "Your XaneTag is reserved for you!";
   const referralLink = data?.referralLink || "";
   const rank = data?.position;
   const referralCount = data?.referralCount ?? 0;
@@ -71,8 +90,8 @@ const WaitlistDashboard = ({ userData, onViewLeaderboard }: WaitlistDashboardPro
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
           <div className="flex flex-col justify-between space-y-2 text-left pr-0 sm:pr-4">
             <span className="text-xs font-semibold text-gray-500">Your XaneTag</span>
-            <div className="flex items-center gap-2"><span className="font-sans text-2xl sm:text-3xl md:text-4xl font-black text-[#0047FF] tracking-tight break-all">{displayTag || "Loading..."}</span><button type="button" onClick={() => handleCopy(displayTag, "tag")} disabled={!displayTag} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600"><>{copiedTag ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}</></button></div>
-            <p className="text-xs font-medium text-gray-500">Your XaneTag is reserved for you!</p>
+            <div className="flex items-center gap-2"><span className="font-sans text-2xl sm:text-3xl md:text-4xl font-black text-[#0047FF] tracking-tight break-all">{displayTag || (data ? "Claim at launch" : "Loading...")}</span><button type="button" onClick={() => handleCopy(displayTag, "tag")} disabled={!displayTag} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600"><>{copiedTag ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}</></button></div>
+            <p className="text-xs font-medium text-gray-500">{tagNote}</p>
           </div>
           <div className="flex items-center justify-between pt-4 sm:pt-0 sm:pl-8 text-left"><div className="space-y-1"><span className="text-xs font-semibold text-gray-500">Waitlist Position</span><p className="font-sans text-3xl sm:text-4xl md:text-5xl font-black text-[#0047FF] tracking-tight">{rank ? `#${rank.toLocaleString()}` : "Pending"}</p><p className="text-xs font-medium text-gray-500">Your position updates with verified referrals.</p></div><div className="w-16 sm:w-20 shrink-0"><img src={crownIcon} alt="Crown" className="w-full object-contain drop-shadow-md" /></div></div>
         </div>

@@ -8,8 +8,10 @@ import CelebrationStep from "@/components/waitlist/CelebrationStep";
 import WaitlistDashboard from "@/components/waitlist/WaitlistDashboard";
 import LeaderboardView from "@/components/waitlist/LeaderboardView";
 import WaitlistFooter from "@/components/waitlist/WaitlistFooter";
+import SignInStep from "@/components/waitlist/SignInStep";
+import { displayTag, MemberView } from "@/lib/waitlistApi";
 
-type WaitlistViewStep = "form" | "telegram" | "celebration" | "dashboard" | "leaderboard";
+type WaitlistViewStep = "form" | "signin" | "telegram" | "celebration" | "dashboard" | "leaderboard";
 
 const WaitlistPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -37,7 +39,7 @@ const WaitlistPage = () => {
 
   useEffect(() => {
     const viewParam = searchParams.get("view") as WaitlistViewStep;
-    if (viewParam && ["form", "telegram", "celebration", "dashboard", "leaderboard"].includes(viewParam)) {
+    if (viewParam && ["form", "signin", "telegram", "celebration", "dashboard", "leaderboard"].includes(viewParam)) {
       setCurrentStep(viewParam);
     }
   }, [searchParams]);
@@ -72,6 +74,34 @@ const WaitlistPage = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // Existing member: sign in with an email code
+  const [signInEmail, setSignInEmail] = useState("");
+  const handleGoToSignIn = (email?: string) => {
+    setSignInEmail(email || "");
+    setCurrentStep("signin");
+    setSearchParams({ view: "signin" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSignedIn = (member: MemberView, email: string) => {
+    // Replace whatever this browser had saved with the member who just signed in.
+    const data: WaitlistFormData = {
+      fullName: "",
+      email,
+      freeTag: member.xaneTag ? displayTag(member.xaneTag) : "",
+      premiumTag: "",
+      userId: member.userId,
+      telegramDeepLink: member.telegramDeepLink || "",
+    };
+    setUserData(data);
+    localStorage.setItem("xane_waitlist_user", JSON.stringify(data));
+    // Someone who never finished the Telegram step is sent back to it.
+    const next: WaitlistViewStep = member.telegramConnected === false ? "telegram" : "dashboard";
+    setCurrentStep(next);
+    setSearchParams({ view: next });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   // Switch back to Form / Waitlist
   const handleGoToForm = () => {
     setCurrentStep("form");
@@ -80,7 +110,7 @@ const WaitlistPage = () => {
   };
 
   return (
-    <WaitlistBackground variant={currentStep} showWatermark={true}>
+    <WaitlistBackground variant={currentStep === "signin" ? "form" : currentStep} showWatermark={true}>
       {/* Dynamic Header based on active view */}
       {currentStep === "leaderboard" ? (
         <WaitlistHeader
@@ -94,7 +124,11 @@ const WaitlistPage = () => {
       {/* Main View Switcher */}
       <main className="flex flex-1 flex-col items-center justify-center">
         {currentStep === "form" && (
-          <WaitlistForm onSubmitSuccess={handleFormSuccess} />
+          <WaitlistForm onSubmitSuccess={handleFormSuccess} onSignIn={handleGoToSignIn} />
+        )}
+
+        {currentStep === "signin" && (
+          <SignInStep initialEmail={signInEmail} onSignedIn={handleSignedIn} onBackToJoin={handleGoToForm} />
         )}
 
         {currentStep === "telegram" && (

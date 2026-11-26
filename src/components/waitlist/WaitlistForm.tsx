@@ -6,6 +6,7 @@ import {
   checkXaneTag,
   displayTag,
   getReferralPreview,
+  isAlreadyRegistered,
   joinWaitlist,
   normalizeTag,
   requestOtp,
@@ -24,6 +25,8 @@ export interface WaitlistFormData {
 
 interface WaitlistFormProps {
   onSubmitSuccess: (data: WaitlistFormData) => void;
+  /** An existing member signs in with an email code instead of joining again. */
+  onSignIn?: (email?: string) => void;
 }
 
 type TagState =
@@ -34,7 +37,7 @@ type TagState =
   | "invalid"
   | "error";
 
-const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
+const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess, onSignIn }) => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [freeTag, setFreeTag] = useState("");
@@ -48,6 +51,9 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
   const [emailOtpCode, setEmailOtpCode] = useState("");
   const [emailResendTimer, setEmailResendTimer] = useState(0);
   const [emailError, setEmailError] = useState("");
+  // The email is already on the waitlist: offer sign-in rather than a dead end.
+  const [alreadyMember, setAlreadyMember] = useState(false);
+  const [referrerIsTag, setReferrerIsTag] = useState(true);
 
   const [freeTagState, setFreeTagState] = useState<TagState>("idle");
   const [referrerTag, setReferrerTag] = useState("");
@@ -161,7 +167,9 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
       try {
         const result = await getReferralPreview(referralCode);
         if (!cancelled) {
+          // A referrer whose reservation expired holds no tag: show their first name.
           setReferrerTag(result.referrerTag || result.referrerName || "");
+          setReferrerIsTag(Boolean(result.referrerTag));
         }
       } catch {
         if (!cancelled) {
@@ -184,6 +192,7 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
     setEmailOtpCode("");
     setEmailError("");
     setFormError("");
+    setAlreadyMember(false);
   };
 
   const handleSendEmailOtp = async () => {
@@ -203,6 +212,11 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
       setEmailResendTimer(result.resendAfterSeconds || 60);
     } catch (error) {
       setEmailOtpState("error");
+      if (isAlreadyRegistered(error)) {
+        setAlreadyMember(true);
+        setEmailError("This email is already on the waitlist.");
+        return;
+      }
       setEmailError(
         error instanceof Error ? error.message : "Could not send verification code to your email."
       );
@@ -289,6 +303,7 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
         telegramDeepLink: result.telegramDeepLink,
       });
     } catch (error) {
+      if (isAlreadyRegistered(error)) setAlreadyMember(true);
       setFormError(
         error instanceof Error ? error.message : "Could not join the waitlist."
       );
@@ -421,7 +436,21 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
             )}
 
             {emailError && (
-              <p className="mt-1 text-xs font-semibold text-red-500">{emailError}</p>
+              <p className="mt-1 text-xs font-semibold text-red-500">
+                {emailError}
+                {alreadyMember && onSignIn && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      onClick={() => onSignIn(email.trim().toLowerCase())}
+                      className="font-bold text-[#0047FF] underline"
+                    >
+                      Sign in to your dashboard
+                    </button>
+                  </>
+                )}
+              </p>
             )}
           </div>
 
@@ -583,7 +612,9 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
             <p className="rounded-[12px] bg-blue-50 px-3 py-2 text-[11px] font-semibold text-[#0047FF] text-left">
               Welcome! 👋 You joined through{" "}
               <span className="font-bold">
-                @{referrerTag.replace(/^@/, "").replace(/\.xane$/i, "")}.xane
+                {referrerIsTag
+                  ? `@${referrerTag.replace(/^@/, "").replace(/\.xane$/i, "")}.xane`
+                  : referrerTag}
               </span>
               's referral.
             </p>
@@ -640,6 +671,19 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSubmitSuccess }) => {
               </span>
             </div>
           </div>
+
+          {onSignIn && (
+            <p className="text-center text-xs font-medium text-gray-500">
+              Already on the waitlist?{" "}
+              <button
+                type="button"
+                onClick={() => onSignIn(validEmail ? email.trim().toLowerCase() : undefined)}
+                className="font-bold text-[#0047FF] hover:underline"
+              >
+                Sign in
+              </button>
+            </p>
+          )}
 
         </form>
       </motion.div>
