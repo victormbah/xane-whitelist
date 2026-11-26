@@ -28,6 +28,8 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/telegram', telegramRoutes);
+// Server-to-server (wallet backend). No CORS needed: it is never called from a browser.
+app.use('/api/internal', require('./routes/internal'));
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 app.use(errorHandler);

@@ -325,6 +325,39 @@ function buildPremiumExpiryEmail(user) {
   };
 }
 
+/**
+ * Correction for members who received the original expiry email, which linked to the homepage
+ * instead of their referral link and said the name "may no longer be available" while it was in
+ * fact still held. Only for members whose tag has really been released.
+ */
+function buildCorrectedExpiryEmail(user) {
+  const tag = user.premium_xane_tag_expired;
+  const count = Number(user.referral_count || 0);
+
+  return {
+    subject: `Correction: your Xane referral link and @${tag}`,
+    html: premiumEmailTemplate({
+      tag,
+      tagLabel: 'Your reservation has ended for',
+      title: 'A correction to our earlier email.',
+      message:
+        `Our earlier email about your @${tag} reservation linked to the Xane homepage instead of ` +
+        'your personal referral link. Sorry about that: your own link is below.\n\n' +
+        `Your 14-day reservation for @${tag} has ended and the name has now been released. ` +
+        'You are still a member of the Xane waitlist: your email stays registered, and your ' +
+        `${count} referral${count === 1 ? '' : 's'}, your level and your place in line are all kept.\n\n` +
+        'At public launch you can claim any available XaneTag, including ' +
+        `@${tag} if no one else has claimed it by then. You can sign in to your waitlist ` +
+        'dashboard at any time with a code sent to this email address.',
+      noteHtml:
+        'Your personal referral link works now and keeps working. Every successful referral ' +
+        'moves you up the waitlist and toward your next level.',
+      closingLine: 'Thank you for being early. Keep sharing to climb before launch.',
+      referralLink: getReferralLink(user),
+    }),
+  };
+}
+
 async function sendPremiumExpiryEmail({ userId }) {
   const { rows } = await pool.query(
     `SELECT *
@@ -485,5 +518,6 @@ module.exports = {
   sendPremiumDay7Reminder,
   sendPremiumExpiryEmail,
   buildPremiumExpiryEmail,
+  buildCorrectedExpiryEmail,
   getReferralLink,
 };

@@ -141,7 +141,7 @@
     "xtend": "^4.0.2"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 test/",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
     "start": "node server.js",
     "migrate": "node migrations/run.js",
     "release-expired-tags": "node scripts/release-expired-premium-tags.js",

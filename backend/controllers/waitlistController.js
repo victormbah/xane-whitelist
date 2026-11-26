@@ -184,6 +184,15 @@ async function getReferralPreview(req, res, next) {
 
 async function joinWaitlist(req, res, next) {
   try {
+    // Set at public launch, before the final sync to the wallet: no new members or
+    // reservations after the snapshot the wallet will honour. Members can still sign in.
+    if (process.env.WAITLIST_CLOSED === 'true') {
+      return res.status(410).json({
+        error: 'The waitlist is closed. Xane is live: create your account in the app.',
+        code: 'WAITLIST_CLOSED',
+      });
+    }
+
     const {
       fullName,
       phone,
