@@ -150,3 +150,29 @@ test('corrected expiry email: personal link, released name, kept benefits', asyn
   assert.match(html, /has now been released/);
   assert.match(html, /2 referrals/);
 });
+
+test('owner decision: members who never finished Telegram keep their free tag reservation', async () => {
+  const pending = await member({ email: 'pending.member@example.test', free: 'pend_tag_1', code: 'pend_tag_1', status: 'pending' });
+  const snap = JSON.parse((await get()).text);
+  const m = snap.members.find((x) => x.waitlistId === pending.id);
+  assert.deepEqual([m.tag, m.tagKind, m.status], ['pend_tag_1', 'free', 'pending']);
+});
+
+test('owner decision: after the waitlist closes, running Premium reservations keep their own 14-day deadline', async () => {
+  const { processPremiumTagChallenges } = require('../services/premiumTagChallengeService');
+  const onTime = await member({ email: 'ontime@example.test', requested: 'ontime_tag', code: 'ontime_tag', deadline: new Date(Date.now() + 3 * 86400000) });
+  const missed = await member({ email: 'missed@example.test', requested: 'missed_tag', code: 'missed_tag', deadline: new Date(Date.now() - 60000) });
+  process.env.WAITLIST_CLOSED = 'true';
+  try {
+    await processPremiumTagChallenges();
+    const row = async (id) => (await pool.query('SELECT * FROM waitlist_users WHERE id = $1', [id])).rows[0];
+    assert.equal((await row(onTime.id)).premium_xane_tag_requested, 'ontime_tag', 'still inside its window: kept');
+    assert.equal((await row(missed.id)).premium_xane_tag_requested, null, 'deadline passed short of the target: released');
+    const snap = JSON.parse((await get()).text);
+    const kinds = Object.fromEntries(snap.members.map((x) => [x.waitlistId, x]));
+    assert.equal(kinds[onTime.id].tagKind, 'premium_reserved');
+    assert.equal(kinds[missed.id].tag, null);
+  } finally {
+    delete process.env.WAITLIST_CLOSED;
+  }
+});
