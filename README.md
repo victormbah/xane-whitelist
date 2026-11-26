@@ -1,73 +1,83 @@
-# Welcome to your Lovable project
+# Xane Waitlist
 
-## Project info
+The official Xane waitlist platform, designed to onboard early users, manage XaneTag reservations and reward community participation through a referral-based system.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+**Live website:** https://waitlist.xane.app
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- User registration and OTP verification
+- Secure member sign-in
+- Free and premium XaneTag reservations
+- Referral tracking and reward milestones
+- Community leaderboard
+- Telegram community integration
+- Automated email notifications
+- Premium reservation expiration management
+- Wallet integration support
+- Responsive mobile and desktop experience
 
-**Use Lovable**
+## Technology Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- REST API integration
 
-Changes made via Lovable will be committed automatically to this repo.
+## Getting Started
 
-**Use your preferred IDE**
+### Prerequisites
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- Node.js
+- npm
+- Git
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Installation
 
-Follow these steps:
+Clone the repository:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+```bash
+git clone https://github.com/xaneApp/xane-whitelist.git
+cd xane-whitelist
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+Install dependencies:
 
-# Step 3: Install the necessary dependencies.
-npm i
+```bash
+npm install
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+Start the development server:
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Production Build
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+npm run build
+```
 
-**Use GitHub Codespaces**
+## Deployment
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The frontend is hosted on Vercel, with backend services hosted on Render.
 
-## What technologies are used for this project?
+Production deployments are managed through the designated GitHub branches.
 
-This project is built with:
+## Repository Structure
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- `main` — Waitlist frontend
+- `backend-branch` — Waitlist backend
 
-## How can I deploy this project?
+## Security
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Environment variables and API credentials must be configured securely and must never be committed to the repository.
 
-## Can I connect a custom domain to my Lovable project?
+## Ownership
 
-Yes, you can!
+Developed and maintained by the Xane Engineering Team.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+© 2026 Xane Global. All rights reserved.
